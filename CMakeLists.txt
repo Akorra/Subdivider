@@ -1,5 +1,12 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.16)
 project(Subdivider VERSION 0.1.0 LANGUAGES C CXX)
+
+# Use the latest available C++ standard
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+enable_testing()
 
 # Build the library first
 add_subdirectory(subdiv)

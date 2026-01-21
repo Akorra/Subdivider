@@ -31,9 +31,9 @@ struct Face;
  * Optional: mark as crease/corner vertex.
  */
 struct Vertex {
-    glm::vec3 position;      ///< Vertex position
-    HalfEdge* outgoing = nullptr; ///< One outgoing half-edge (nullptr if isolated)
-    bool isCorner = false;   ///< True if vertex is a crease/corner
+    glm::vec3 position;             ///< Vertex position
+    HalfEdge* outgoing = nullptr;   ///< One outgoing half-edge (nullptr if isolated)
+    bool isCorner = false;          ///< True if vertex is a crease/corner
 
     // Constructors
     Vertex() = default;
@@ -50,13 +50,13 @@ struct Vertex {
  * Represents an edge directed from its previous half-edge vertex to `to`.
  */
 struct HalfEdge {
-    Vertex*   to     = nullptr; ///< Destination vertex of this half-edge
-    HalfEdge* next   = nullptr; ///< Next half-edge around the face
-    HalfEdge* prev   = nullptr; ///< Previous half-edge around the face
-    HalfEdge* twin   = nullptr; ///< Opposite half-edge
-    Face*     face   = nullptr; ///< Face this half-edge borders
+    Vertex*   to      = nullptr; ///< Destination vertex of this half-edge
+    HalfEdge* next    = nullptr; ///< Next half-edge around the face
+    HalfEdge* prev    = nullptr; ///< Previous half-edge around the face
+    HalfEdge* twin    = nullptr; ///< Opposite half-edge
+    Face*     face    = nullptr; ///< Face this half-edge borders
 
-    EdgeTag tag = EdgeTag::EDGE_SMOOTH; ///< Edge tag for subdivision
+    EdgeTag tag       = EdgeTag::EDGE_SMOOTH; ///< Edge tag for subdivision
     float   sharpness = 0.0f;           ///< Only valid for EDGE_SEMI
 
     HalfEdge() = default;
@@ -71,7 +71,7 @@ struct HalfEdge {
      */
     void setSharpness(float s) {
         assert(tag == EdgeTag::EDGE_SEMI && "Sharpness can only be set on semi-sharp edges");
-        sharpness = s;
+        sharpness = glm::max(0.0f, s);
     }
 
     /**
@@ -110,7 +110,8 @@ struct Face {
     /**
      * @brief Checks if the face is valid (all edges connected in a loop)
      */
-    bool isValidLoop() const {
+    bool isValidLoop() const 
+    {
         if (!edge) return false;
         HalfEdge* e = edge->next;
         while (e && e != edge) e = e->next;
@@ -125,7 +126,8 @@ inline bool Vertex::isBoundary() const {
     if (!outgoing) return true; // isolated vertex
     HalfEdge* e = outgoing;
     do {
-        if (e->isBoundary()) return true;
+        if (e->isBoundary()) 
+            return true;
         e = e->twin ? e->twin->next : nullptr;
     } while (e && e != outgoing);
     return false;
