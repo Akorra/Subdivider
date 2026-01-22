@@ -22,13 +22,13 @@ public:
      * Add vertices to Mesh from positions
      */
     Vertex* addVertex(const glm::vec3& pos);
-    Vertex* addVertex(const float x, const float y, const float y);
+    Vertex* addVertex(const float x, const float y, const float z);
 
     /**
      * Add a face from vertex indices
      * supports ngons (n>2 ofcourse)
      */
-    Face* addFace(const std::vector<uint32_t>& indices);
+    Face* addFace(const std::vector<uint32_t>& vertexIndices);
 
     /**
      * Resolve half edge structure (twins, boundaries, validate manifoldness)
@@ -45,6 +45,20 @@ public:
      */
     void clear();
 
+private:
+    /**
+     * rebuild index cache - call on topology cahnge
+     */
+    void rebuildIndexCache();
+
+    /**
+     * halfedge map helper -> generates flat key from vertex index pair
+     */
+    static inline uint64_t makeEdgeKey(uint32_t from, uint32_t to) 
+    {
+        return (uint64_t(from) << 32) | uint64_t(to);
+    }
+
 
 public:
     // storage (owning)
@@ -53,19 +67,10 @@ public:
     std::vector<Face*>      faces;
 
 private:
-    // Helper for twin resolution (add readibility)
-    using EdgeKey = std::pair<uint32_t, uint32_t>;
-
-    struct EdgeKeyHash 
-    {
-        size_t operator()(const EdgeKey& k) const 
-        {
-            return (size_t(k.first) << 32) ^ size_t(k.second);
-        }
-    };
-
-    std::unordered_map<EdgeKey, HalfEdge*, EdgeKeyHash> edgeMap;
-
+    // Index cache (rebuilt only when topology changes)
+    std::vector<Vertex*> indexToVertex;
+    std::unordered_map<const Vertex*, uint32_t> vertexToIndex;
+    bool indicesDirty = true;
 };
 
 } // namespace Subdiv::Control
