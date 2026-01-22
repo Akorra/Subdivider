@@ -2,6 +2,6 @@
 #include "subdiv.hpp"
 
 int main() {
-    subdiv::Init();
+    Subdiv::Init();
     return 0;
 }

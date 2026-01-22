@@ -2,6 +2,6 @@
 
 #include <iostream>
 
-namespace subdiv {
+namespace Subdiv {
     void Init();
 }

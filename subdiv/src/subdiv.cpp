@@ -1,6 +1,6 @@
 #include "subdiv.hpp"
 
-void subdiv::Init()
+void Subdiv::Init()
 {
     std::cout << "Hello, from Subdivider!\n";
 }
