@@ -10,6 +10,7 @@ FetchContent_MakeAvailable(Catch2)
 
 add_executable(subdiv_tests
     test_utils.cpp
+    test_mesh.cpp
 )
 
 target_link_libraries(subdiv_tests

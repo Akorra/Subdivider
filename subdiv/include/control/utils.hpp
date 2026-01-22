@@ -57,7 +57,7 @@ struct HalfEdge {
     Face*     face    = nullptr; ///< Face this half-edge borders
 
     EdgeTag tag       = EdgeTag::EDGE_SMOOTH; ///< Edge tag for subdivision
-    float   sharpness = 0.0f;           ///< Only valid for EDGE_SEMI
+    float   sharpness = 0.0f;                 ///< Only valid for EDGE_SEMI
 
     HalfEdge() = default;
 
@@ -103,7 +103,9 @@ struct Face {
             assert(e && "Half-edge loop is broken");
             ++count;
             e = e->next;
-        } while (e != edge);
+        } 
+        while (e != edge);
+
         return count;
     }
 
@@ -124,12 +126,14 @@ struct Face {
  */
 inline bool Vertex::isBoundary() const {
     if (!outgoing) return true; // isolated vertex
-    HalfEdge* e = outgoing;
+    const HalfEdge* e = outgoing;
     do {
         if (e->isBoundary()) 
             return true;
         e = e->twin ? e->twin->next : nullptr;
-    } while (e && e != outgoing);
+    } 
+    while (e && e != outgoing);
+    
     return false;
 }
 
