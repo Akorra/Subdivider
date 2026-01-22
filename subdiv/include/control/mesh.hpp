@@ -2,6 +2,7 @@
 
 #include "utils.hpp"
 
+#include <string>
 #include <unordered_map>
 
 namespace Subdiv::Control 
@@ -25,6 +26,11 @@ public:
     Vertex* addVertex(const float x, const float y, const float z);
 
     /**
+     * clean out mesh components
+     */
+    void clear();
+
+    /**
      * Add a face from vertex indices
      * supports ngons (n>2 ofcourse)
      */
@@ -41,9 +47,10 @@ public:
     bool validate() const;
 
     /**
-     * clean out mesh components
+     * import from .obj file
      */
-    void clear();
+    bool loadOBJ(const std::string&  filepath, bool flipYZ=false, bool clearMesh=true);
+    bool loadOBJ(      std::istream& in,       bool flipYZ=false, bool clearMesh=true);
 
 private:
     /**

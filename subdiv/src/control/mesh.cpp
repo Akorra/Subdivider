@@ -1,5 +1,11 @@
 #include "control/mesh.hpp"
 
+#include <string>
+#include <iostream>
+#include <istream>
+#include <fstream>
+#include <sstream>
+
 namespace Subdiv::Control 
 {
 
@@ -10,9 +16,21 @@ Mesh::~Mesh()
 
 void Mesh::clear() 
 {
-    for(auto* v : vertices)     delete v;
-    for(auto* e : halfEdges)    delete e;
-    for(auto* f : faces)        delete f;
+    // Delete half-edges
+    for (auto* he : halfEdges) delete he;
+    halfEdges.clear();
+
+    // Delete faces
+    for (auto* f : faces) delete f;
+    faces.clear();
+
+    // Delete vertices
+    for (auto* v : vertices) delete v;
+    vertices.clear();
+
+    // Clear caches
+    vertexToIndex.clear();
+    indicesDirty = true;
 }
 
 /** 
@@ -54,8 +72,7 @@ Face* Mesh::addFace(const std::vector<uint32_t>& indices)
     // Wire next/prev/to
     for (size_t i = 0; i < n; ++i) 
     {
-        HalfEdge* he   = loop[i];
-
+        HalfEdge* he = loop[i];
         he->to   = vertices[indices[(i+1)%n]];
         he->next = loop[(i+1)%n];
         he->prev = loop[(i+n-1)%n];
@@ -159,6 +176,64 @@ bool Mesh::validate() const {
     }
 
     return true;
+}
+
+/** 
+ * OBJ Import - for now we only import vertex and face data
+*/
+bool Mesh::loadOBJ(const std::string& filepath, bool flipYZ, bool clearMesh)
+{
+    std::ifstream file(filepath);
+    if(!file.is_open())
+    {
+        std::cerr << "Cannot open OBJ file: " << filepath << "\n";
+        return false;
+    }
+
+    return loadOBJ(file, flipYZ, clearMesh);
+}
+
+bool Mesh::loadOBJ(std::istream& in, bool flipYZ, bool clearMesh)
+{
+    if(clearMesh) clear();
+
+    std::vector<uint32_t> faceIndices;
+    std::string line;
+
+    while(std::getline(in, line))
+    {
+        if (line.empty() || line[0] == '#')
+            continue;
+
+        std::stringstream ss(line);
+        std::string tag;
+        ss >> tag;
+
+        if(tag == "v") //< vertex 
+        {
+            float x, y, z;
+            ss >> x >> y >> z;
+            if(flipYZ) 
+                std::swap(y,z);
+            addVertex(x, y, z);
+        }
+        else if(tag == "f")
+        {
+            faceIndices.clear();
+            std::string vert;
+            while(ss >> vert)
+            {
+                size_t slash = vert.find('/');
+                uint32_t idx = std::stoi(vert.substr(0, slash)) - 1;
+                faceIndices.push_back(idx);
+            }
+            
+            if(!faceIndices.empty())
+                addFace(faceIndices);
+        }
+    }
+
+    return buildConnectivity();
 }
 
 }

@@ -92,3 +92,75 @@ TEST_CASE("Mesh: non-manifold detection", "[Mesh]") {
 
     REQUIRE(mesh.buildConnectivity() == false); // should detect non-manifold
 }
+
+TEST_CASE("OBJ: single triangle loads correctly") {
+    Mesh mesh;
+
+    std::stringstream obj(R"(
+        v 0 0 0
+        v 1 0 0
+        v 0 1 0
+        f 1 2 3
+    )");
+
+    REQUIRE(mesh.loadOBJ(obj));
+    REQUIRE(mesh.validate());
+    REQUIRE(mesh.vertices.size() == 3);
+    REQUIRE(mesh.faces.size() == 1);
+    REQUIRE(mesh.halfEdges.size() == 3);
+}
+
+TEST_CASE("OBJ: quad face supported") {
+    Mesh mesh;
+
+    std::stringstream obj(R"(
+        v 0 0 0
+        v 1 0 0
+        v 1 1 0
+        v 0 1 0
+        f 1 2 3 4
+    )");
+
+    REQUIRE(mesh.loadOBJ(obj));
+    REQUIRE(mesh.validate());
+    REQUIRE(mesh.faces[0]->valence() == 4);
+}
+
+TEST_CASE("OBJ: shared edge creates twins") {
+    Mesh mesh;
+
+    std::stringstream obj(R"(
+        v 0 0 0
+        v 1 0 0
+        v 0 1 0
+        v 1 1 0
+        f 1 2 3
+        f 2 4 3
+    )");
+
+    REQUIRE(mesh.loadOBJ(obj));
+    REQUIRE(mesh.validate());
+
+    int twinCount = 0;
+    for (HalfEdge* he : mesh.halfEdges) {
+        if (he->twin)
+            ++twinCount;
+    }
+
+    REQUIRE(twinCount > 0);
+}
+
+TEST_CASE("OBJ: non-manifold edge fails") {
+    Mesh mesh;
+
+    std::stringstream obj(R"(
+        v 0 0 0
+        v 1 0 0
+        v 0 1 0
+        v 0 -1 0
+        f 1 2 3
+        f 1 2 4
+    )");
+
+    REQUIRE_FALSE(mesh.loadOBJ(obj));
+}
