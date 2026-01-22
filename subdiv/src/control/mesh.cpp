@@ -8,7 +8,7 @@ Mesh::~Mesh()
     clear();
 }
 
-void Mesh::cleas() 
+void Mesh::clear() 
 {
     for(auto* v : vertices)     delete v;
     for(auto* e : halfEdges)    delete e;
