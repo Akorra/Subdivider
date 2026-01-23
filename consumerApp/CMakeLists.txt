@@ -39,10 +39,10 @@ add_subdirectory(
 
 # Create a GLAD loader target for OpenGL core 3.3
 glad_add_library(
-    glad_gl_core_33
+    glad_gl_core_46
     REPRODUCIBLE
-    API gl:core=3.3
+    API gl:core=4.6
 )
 
 # Link the created glad loader with our executable
-target_link_libraries(consumerApp PRIVATE glad_gl_core_33)
+target_link_libraries(consumerApp PRIVATE glad_gl_core_46)
