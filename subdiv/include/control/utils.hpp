@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include <cassert>
 #include <glm/glm.hpp> // GLM math
 
@@ -119,6 +120,14 @@ struct Face {
         while (e && e != edge) e = e->next;
         return e == edge;
     }
+};
+
+/**
+ * Face Group data structure
+ */
+struct FaceGroup {
+    std::string name;
+    std::vector<Face*> faces;
 };
 
 /**
