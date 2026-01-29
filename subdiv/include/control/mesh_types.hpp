@@ -137,12 +137,11 @@ using VertexAttributes = std::vector<VertexAttributes>;
 using FaceAttributes   = std::vector<FaceAttributes>;
 
 /**
- * @brief Helper to create a unique key for an edge (unordered pair of vertices).
- * Used for fast edge lookup during mesh construction.
+ * @brief Create an undirected key for an edge (unordered pair of vertices).
+ * Used for finding edges regardless of direction.
  */
-inline uint64_t makeEdgeKey(VertexIndex v0, VertexIndex v1) 
+inline uint64_t makeUndirectedEdgeKey(VertexIndex v0, VertexIndex v1) 
 {
-    // Ensure consistent ordering (smaller index first)
     if (v0 > v1) std::swap(v0, v1);
     return (static_cast<uint64_t>(v0) << 32) | static_cast<uint64_t>(v1);
 }

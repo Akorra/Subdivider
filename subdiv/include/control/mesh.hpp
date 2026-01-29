@@ -1,72 +1,103 @@
 #pragma once
 
-#include "utils.hpp"
+#include "mesh_types.hpp"
 
 #include <unordered_map>
 
 namespace Subdiv::Control 
 {
-
-class Mesh 
+/**
+ * @brief Catmull-Clark mesh.
+ * Optimized for GPU upload and real-time editing.
+ */
+class Mesh
 {
-
 public:
     Mesh() = default;
-    ~Mesh();
+    ~Mesh() = default;
 
-    // for now lets not allow for copy
+    // Delete copy
     Mesh(const Mesh&) = delete;
     Mesh& operator=(const Mesh&) = delete;
+    
+    // Allow move
+    Mesh(Mesh&&) = default;
+    Mesh& operator=(Mesh&&) = default;
 
-    //! Add vertices to Mesh from positions
-    Vertex* addVertex(const glm::vec3& pos);
-    Vertex* addVertex(const float x, const float y, const float z);
+    // --- Element creation ---
+    VertexIndex   addVertex(const glm::vec3& pos);
+    FaceIndex     addFace(const std::vector<VertexIndex>& verts);
 
-    //! clean out mesh components
-    void clear();
+    // --- Accessors (topology) ---
+    const Vertices&  getVertices()  const { return vertices_; }
+    const HalfEdges& getHalfEdges() const { return halfEdges_; }
+    const Edges&     getEdges()     const { return edges_; }
+    const Faces&     getFaces()     const { return faces_; }
 
-    //! Add a face from vertex indices - supports ngons (n>2 ofcourse)
-    Face* addFace(const std::vector<uint32_t>& vertexIndices);
+    Vertex&           vertex(VertexIndex i)       { return vertices_[i]; }
+    const Vertex&     vertex(VertexIndex i) const { return vertices_[i]; }
+    
+    HalfEdge&         halfEdge(HalfEdgeIndex i)       { return halfEdges_[i]; }
+    const HalfEdge&   halfEdge(HalfEdgeIndex i) const { return halfEdges_[i]; }
+    
+    Edge&             edge(EdgeIndex i)       { return edges_[i]; }
+    const Edge&       edge(EdgeIndex i) const { return edges_[i]; }
+    
+    Face&             face(FaceIndex i)       { return faces_[i]; }
+    const Face&       face(FaceIndex i) const { return faces_[i]; }
 
-    //! Resolve half edge structure (twins, boundaries, validate manifoldness)
-    bool buildConnectivity();
-
-    //! validate mesh
+    // --- Accessors (attributes) ---
+    const VertexAttributes& getVertexAttributes() const { return vertexAttributes_; }
+    const FaceAttributes&   getFaceAttributes()   const { return faceAttributes_; }
+    
+    VertexAttributes&       vertexAttrib(VertexIndex i)       { return vertexAttributes_[i]; }
+    const VertexAttributes& vertexAttrib(VertexIndex i) const { return vertexAttributes_[i]; }
+    
+    FaceAttributes&       faceAttrib(FaceIndex i)       { return faceAttributes_[i]; }
+    const FaceAttributes& faceAttrib(FaceIndex i) const { return faceAttributes_[i]; }
+    
+    // --- Topology queries ---
+    VertexIndex   getFromVertex(HalfEdgeIndex heIdx) const;
+    int           getVertexValence(VertexIndex vIdx) const;
+    bool          isBoundaryVertex(VertexIndex vIdx) const;
+    
+    // Find half-edge from v0 to v1 (returns INVALID_INDEX if not found)
+    HalfEdgeIndex findHalfEdge(VertexIndex v0, VertexIndex v1) const;
+    
+    // Find edge between v0 and v1 (returns INVALID_INDEX if not found)
+    EdgeIndex     findEdge(VertexIndex v0, VertexIndex v1) const;
+    
+    // --- Validation ---
     bool validate() const;
+    
+    // --- Statistics ---
+    size_t numVertices()  const { return vertices_.size(); }
+    size_t numHalfEdges() const { return halfEdges_.size(); }
+    size_t numEdges()     const { return edges_.size(); }
+    size_t numFaces()     const { return faces_.size(); }
+    
+    // --- Editing support ---
+    void clear();
+    void rebuildEdgeMap(); // Rebuild after bulk modifications
 
-    //! import from .obj file
-    bool loadOBJ(const std::string&  filepath, bool flipYZ=false, bool clearMesh=true);
-    bool loadOBJ(      std::istream& in,       bool flipYZ=false, bool clearMesh=true);
-
-    //! apply crease to edge
-    void applyCrease(uint32_t a, uint32_t b, float sharpness);
-
-    //! get half-edge from vertex indices
-    HalfEdge* getHalfEdge(uint32_t from, uint32_t to);
-
-private:
-    //! rebuild index cache - call on topology cahnge
-    void rebuildIndexCache();
-
-    //! halfedge map helper -> generates flat key from vertex index pair
-    static inline uint64_t makeEdgeKey(uint32_t from, uint32_t to) 
-    {
-        return (uint64_t(from) << 32) | uint64_t(to);
-    }
-
-public:
-    // storage (owning)
-    std::vector<Vertex*>    vertices;
-    std::vector<HalfEdge*>  halfEdges;
-    std::vector<Face*>      faces;
+    // --- Attribute management ---
+    void computeVertexNormals();  // Compute smooth vertex normals from face normals
+    void computeFaceNormals();    // Compute face normals from geometry
 
 private:
-    // Index cache (rebuilt only when topology changes)
-    std::unordered_map<const Vertex*, uint32_t> vertexToIndex;
-    bool indicesDirty = true;
+    Vertices  vertices_;
+    HalfEdges halfEdges_;
+    Edges     edges_;
+    Faces     faces_;
 
-    std::vector<FaceGroup> groups;
-    std::unordered_map<uint64_t, HalfEdge*> edgeLookup;
+    // Rendering attributes (GPU-ready, separate buffers)
+    VertexAttributes m_vertexAttribs;
+    FaceAttributes   m_faceAttribs;
+    
+    std::vector<FaceGroup> faceGroups_;
+    
+    // Mapping: directed (v0 -> v1) -> HalfEdgeIndex (This stores the half-edge FROM v0 TO v1)
+    std::unordered_map<uint64_t, HalfEdgeIndex> halfEdgeMap_;
 };
 
 } // namespace Subdiv::Control
