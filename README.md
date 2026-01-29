@@ -277,8 +277,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 📞 Contact
 
-- **Author**: [Your Name](https://github.com/yourusername)
-- **Project**: [https://github.com/yourusername/subdivider](https://github.com/yourusername/subdivider)
-- **Issues**: [https://github.com/yourusername/subdivider/issues](https://github.com/yourusername/subdivider/issues)
+- **Author**: [Filipe Marques](https://github.com/Akorra)
+- **Project**: [https://github.com/yourusername/subdivider](https://github.com/Akorra/subdivider)
+- **Issues**: [https://github.com/yourusername/subdivider/issues](https://github.com/Akorra/subdivider/issues)
 
 ---
