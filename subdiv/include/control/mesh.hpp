@@ -9,6 +9,7 @@ namespace Subdiv::Control
 /**
  * @brief Catmull-Clark mesh.
  * Optimized for GPU upload and real-time editing.
+ * Errors are logged to global Diagnostics singleton if enabled.
  */
 class Mesh
 {
