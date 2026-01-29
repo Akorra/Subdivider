@@ -127,168 +127,22 @@ sudo cmake --install build
 
 <details>
 <summary><b>Basic Mesh Creation</b></summary>
-```cpp
-#include <subdiv/control/controlmesh.h>
-
-using namespace Subdiv::Control;
-
-ControlMesh mesh;
-
-// Create vertices
-auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
-auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
-auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
-
-// Create triangle face
-FaceIndex face = mesh.addFace({v0, v1, v2});
-
-// Query mesh
-std::cout << "Vertices: " << mesh.numVertices() << "\n";
-std::cout << "Faces: " << mesh.numFaces() << "\n";
-std::cout << "Edges: " << mesh.numEdges() << "\n";
-```
-
+TBA
 </details>
 
 <details>
 <summary><b>Error Handling with Diagnostics</b></summary>
-```cpp
-#include <subdiv/control/controlmesh.h>
-#include <subdiv/diagnostics/diagnosticscontext.h>
-
-using namespace Subdiv;
-
-// Enable error tracking
-Diagnostics::enable(Diagnostics::Mode::ERRORS_ONLY);
-
-Control::ControlMesh mesh;
-auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
-auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
-
-// Try to create invalid face
-mesh.addFace({v0, v1});  // Too few vertices
-
-if (Diagnostics::hasErrors()) {
-    std::cerr << Diagnostics::getErrorSummary();
-}
-
-Diagnostics::disable();
-```
-
-</details>
-
-<details>
-<summary><b>Result-Based Error Handling</b></summary>
-```cpp
-#include <subdiv/control/controlmesh.h>
-
-using namespace Subdiv::Control;
-
-ControlMesh mesh;
-auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
-auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
-
-// Use Result type for explicit error handling
-auto result = mesh.tryAddFace({v0, v1});
-
-if (result.isOk()) {
-    FaceIndex face = result.value();
-    std::cout << "Face created: " << face << "\n";
-} else {
-    const auto& error = result.error();
-    std::cerr << "Error: " << error.message << "\n";
-}
-```
-
+TBA
 </details>
 
 <details>
 <summary><b>Profiling and Performance Analysis</b></summary>
-```cpp
-#include <subdiv/control/controlmesh.h>
-#include <subdiv/diagnostics/diagnosticscontext.h>
-#include <subdiv/config.h>
-
-using namespace Subdiv;
-
-// Enable profiling (requires SUBDIV_ENABLE_PROFILING=ON)
-if constexpr (BuildInfo::profilingEnabled) {
-    Diagnostics::enable(Diagnostics::Mode::ERRORS_AND_PROFILING);
-}
-
-{
-    SUBDIV_PROFILE("BuildLargeMesh");
-    
-    Control::ControlMesh mesh;
-    
-    // Create 100x100 grid
-    for (int y = 0; y < 100; ++y) {
-        for (int x = 0; x < 100; ++x) {
-            mesh.addVertex({float(x), float(y), 0.0f});
-        }
-    }
-    
-    for (int y = 0; y < 99; ++y) {
-        for (int x = 0; x < 99; ++x) {
-            // Create quad faces...
-        }
-    }
-}
-
-std::cout << Diagnostics::getProfilingSummary();
-```
-
-</details>
-
-<details>
-<summary><b>Edge Creasing and Sharpness</b></summary>
-```cpp
-#include <subdiv/control/controlmesh.h>
-
-using namespace Subdiv::Control;
-
-ControlMesh mesh;
-
-// Create mesh...
-
-// Set edge to be sharp crease
-EdgeIndex edge = mesh.findEdge(v0, v1);
-mesh.edge(edge).tag = EdgeTag::EDGE_CREASE;
-
-// Set semi-sharp edge with sharpness value
-EdgeIndex semiSharp = mesh.findEdge(v2, v3);
-mesh.edge(semiSharp).tag = EdgeTag::EDGE_SEMI;
-mesh.edge(semiSharp).sharpness = 2.0f;  // Decreases each subdivision level
-
-// Set corner vertex
-mesh.vertex(v0).isCorner = true;
-mesh.vertex(v0).sharpness = 10.0f;
-```
-
+TBA
 </details>
 
 <details>
 <summary><b>Computing Normals</b></summary>
-```cpp
-#include <subdiv/control/controlmesh.h>
-
-using namespace Subdiv::Control;
-
-ControlMesh mesh;
-
-// Build mesh...
-
-// Compute smooth vertex normals
-mesh.computeVertexNormals();
-
-// Access normals
-for (size_t i = 0; i < mesh.numVertices(); ++i) {
-    const auto& normal = mesh.vertexAttrib(i).normal;
-    std::cout << "Vertex " << i << " normal: "
-              << normal.x << ", " << normal.y << ", " << normal.z << "\n";
-}
-```
-
+TBA
 </details>
 
 ---
