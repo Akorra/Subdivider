@@ -80,7 +80,7 @@ FaceIndex Mesh::addFace(const std::vector<VertexIndex>& verts)
         {
             std::ostringstream oss;
             oss << "edge (" << v0 << " -> " << v1 << ") at position " << i << " - this directed edge already exists in the mesh";
-            return returnError("DUPLICATE_DIRECTED_EDGE", "Cannot create two half-edges with the same direction", oss.str());
+            return returnError("NON_MANIFOLD_EDGE", "Cannot create two half-edges with the same direction", oss.str());
         }
 
         HalfEdgeIndex heIdx   = static_cast<HalfEdgeIndex>(halfEdges_.size());
@@ -123,7 +123,6 @@ FaceIndex Mesh::addFace(const std::vector<VertexIndex>& verts)
             SUBDIV_TRACK_ALLOC("Edges", sizeof(Edge));
             
             // Store this half-edge in the map for future twin lookup
-            uint64_t directedKey = makeDirectedEdgeKey(v0, v1);
             halfEdgeMap_[directedKey] = heIdx;
         }        
 
@@ -183,36 +182,39 @@ int Mesh::getVertexValence(VertexIndex vIdx) const
     {
         valence++;
         
-        // Move to next outgoing half-edge
-        HalfEdgeIndex twin = halfEdges_[current].twin;
-
+        auto twin = halfEdges_[current].twin;
         if (twin == INVALID_INDEX) 
         {
-            // Boundary vertex - count edges in other direction
-            current = v.outgoing;
-            // Walk backwards until we hit boundary
-            while (true) 
+            // boundary going clockwise - counter-clockwise from start
+            current = start;
+            
+            while(true)
             {
-                HalfEdgeIndex prev = halfEdges_[current].prev;
-                if (prev == INVALID_INDEX) break;
+                auto prev = halfEdges_[current].prev;
+                if(prev == INVALID_INDEX) break;
                 
-                HalfEdgeIndex prevTwin = halfEdges_[prev].twin;
-                if (prevTwin == INVALID_INDEX) break;
-                
-                current = prevTwin;
+                auto prevTwin = halfEdges_[prev].twin;
+                if(prevTwin == INVALID_INDEX)
+                {
+                    // This prev edge is the boundary on the other side
+                    // We need to count it
+                    valence++;
+                    break;
+                }
+                // Count this edge and continue
                 valence++;
+                current = prevTwin;
             }
-            break;
+            break; 
         }
-        
+    
         current = halfEdges_[twin].next;
         
-        // Safety check for infinite loop
         if (valence > 1000)
-            return -1; // Invalid mesh
+            return -1; // Safety check
         
     } 
-    while (current != start && current != INVALID_INDEX);
+    while (current != start);
     
     return valence;
 }
@@ -256,14 +258,14 @@ HalfEdgeIndex Mesh::findHalfEdge(VertexIndex v0, VertexIndex v1) const
     auto it = halfEdgeMap_.find(key);
     
     if (it != halfEdgeMap_.end())
-        return it->second; 
+        return it->second; // found it
 
     // Try opposite direction and return its twin
     uint64_t twinKey = makeDirectedEdgeKey(v1, v0);
     it = halfEdgeMap_.find(twinKey);
 
     if (it != halfEdgeMap_.end()) 
-        return halfEdges_[it->second].twin;  
+        return halfEdges_[it->second].twin; // found via twin  
 
     return INVALID_INDEX;
 }
