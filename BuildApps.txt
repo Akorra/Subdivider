@@ -1,0 +1,70 @@
+# Using CMake directly
+cmake -B build/debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/debug
+./build/debug/consumerApp/consumerApp
+
+cmake -B build/release -DCMAKE_BUILD_TYPE=Release
+cmake --build build/release
+
+cmake -B build/profile -DCMAKE_BUILD_TYPE=Profile
+cmake --build build/profile
+
+# Run tests
+ctest --test-dir build/debug
+
+# Or using make target
+cmake --build build/debug --target runConsumer
+
+# Using CMake presets (if you added CMakePresets.json)
+cmake --preset debug
+cmake --build --preset debug
+ctest --preset debug
+
+cmake --preset profile
+cmake --build --preset profile
+
+cmake --preset release
+cmake --build --preset release
+
+# Examples custom config
+
+# Release build but keep validation for production debugging
+cmake -B build/custom \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DSUBDIV_ENABLE_VALIDATION=ON
+cmake --build build/custom
+
+# Debug build without tests
+cmake -B build/debug-no-tests \
+    -DCMAKE_BUILD_TYPE=Debug \
+    -DSUBDIV_BUILD_TESTS=OFF
+cmake --build build/debug-no-tests
+
+# Profile build with specific flags
+cmake -B build/profile-custom \
+    -DCMAKE_BUILD_TYPE=Profile \
+    -DSUBDIV_ENABLE_PROFILING=ON \
+    -DSUBDIV_ENABLE_MEMORY_TRACKING=ON \
+    -DSUBDIV_ENABLE_VALIDATION=ON \
+    -DSUBDIV_ENABLE_ASSERTS=OFF
+cmake --build build/profile-custom
+
+# Run the tests:
+
+# Configure and build
+cmake -B build/debug -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/debug
+
+# Run all tests
+ctest --test-dir build/debug --output-on-failure
+
+# Or run directly
+./build/debug/subdiv/tests/subdiv_tests
+
+# Run specific tests
+./build/debug/subdiv/tests/subdiv_tests "[controlmesh]"
+./build/debug/subdiv/tests/subdiv_tests "[diagnostics]"
+
+# Verbose output
+./build/debug/subdiv/tests/subdiv_tests -s
+
