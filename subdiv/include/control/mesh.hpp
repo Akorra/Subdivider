@@ -47,8 +47,8 @@ public:
     const Face&       face(FaceIndex i) const { return faces_[i]; }
 
     // --- Accessors (attributes) ---
-    const VertexAttributes& getVertexAttributes() const { return vertexAttributes_; }
-    const FaceAttributes&   getFaceAttributes()   const { return faceAttributes_; }
+    const VertexAttribs& getVertexAttributes() const { return vertexAttributes_; }
+    const FaceAttribs&   getFaceAttributes()   const { return faceAttributes_; }
     
     VertexAttributes&       vertexAttrib(VertexIndex i)       { return vertexAttributes_[i]; }
     const VertexAttributes& vertexAttrib(VertexIndex i) const { return vertexAttributes_[i]; }
@@ -91,8 +91,8 @@ private:
     Faces     faces_;
 
     // Rendering attributes (GPU-ready, separate buffers)
-    VertexAttributes m_vertexAttribs;
-    FaceAttributes   m_faceAttribs;
+    VertexAttribs vertexAttributes_;
+    FaceAttribs   faceAttributes_;
     
     std::vector<FaceGroup> faceGroups_;
     

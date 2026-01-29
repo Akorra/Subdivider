@@ -1,318 +1,464 @@
 #include "control/mesh.hpp"
 
-#include <iostream>
-#include <istream>
-#include <fstream>
-#include <sstream>
+#include <cassert>
 
 namespace Subdiv::Control 
 {
 
-Mesh::~Mesh()
+// --- Element creation ---
+
+VertexIndex Mesh::addVertex(const glm::vec3& pos)
 {
-    clear();
+    VertexIndex idx = static_cast<VertexIndex>(vertices_.size());
+    vertices_.push_back(Vertex{pos});
+    vertexAttributes_.push_back(VertexAttributes{});
+    return idx;
 }
 
-void Mesh::clear() 
+FaceIndex Mesh::addFace(const std::vector<VertexIndex>& verts)
 {
-    // Delete half-edges
-    for (auto* he : halfEdges) delete he;
-    halfEdges.clear();
-
-    // Delete faces
-    for (auto* f : faces) delete f;
-    faces.clear();
-
-    // Delete vertices
-    for (auto* v : vertices) delete v;
-    vertices.clear();
-
-    // Clear caches
-    vertexToIndex.clear();
-    edgeLookup.clear();
-    groups.clear();
-
-    indicesDirty = true;
-}
-
-/** 
- * Vertex creation
-*/
-Vertex* Mesh::addVertex(const glm::vec3& pos)
-{
-    Vertex* v = new Vertex(pos);
-    vertices.push_back(v);
-    indicesDirty = true;
-    return v;
-}
-
-Vertex* Mesh::addVertex(const float x, const float y, const float z)
-{
-    return addVertex({x, y, z});
-}
-
-/** 
- * Face creation (ngons supported)
-*/
-Face* Mesh::addFace(const std::vector<uint32_t>& indices) 
-{
-    assert(indices.size() > 2 && "Faces must have at least 3 vertices");
-
-    Face* f = new Face();
-    faces.push_back(f);
+    assert(verts.size() > 2 &&
+        "Faces must have at least 3 vertices");
     
-    const size_t n = indices.size();
-    std::vector<HalfEdge*> loop(n);
-
-    // Create half edges:
-    for(size_t i = 0; i < n; ++i)
-    {
-        loop[i] = new HalfEdge();
-        halfEdges.push_back(loop[i]);
+    // Check all vertices exist
+    for (VertexIndex v : verts)
+        assert(v < vertices_.size() && "Invalid vertex index");
+    
+    // Check for duplicate vertices in face
+    for (size_t i = 0; i < verts.size(); ++i) {
+        for (size_t j = i + 1; j < verts.size(); ++j)
+            assert(verts[i] != verts[j] && "Face has duplicate vertices");
     }
-
-    // Wire next/prev/to
-    for (size_t i = 0; i < n; ++i) 
+    
+    FaceIndex faceIdx = static_cast<FaceIndex>(faces_.size());
+    Face face;
+    face.valence = static_cast<uint32_t>(verts.size());
+    
+    // Create half-edges for this face
+    std::vector<HalfEdgeIndex> faceHalfEdges;
+    faceHalfEdges.reserve(verts.size());
+    
+    for (size_t i = 0; i < verts.size(); ++i) 
     {
-        HalfEdge* he = loop[i];
-        he->to   = vertices[indices[(i+1)%n]];
-        he->next = loop[(i+1)%n];
-        he->prev = loop[(i+n-1)%n];
-        he->face = f;
-
-        // Assign outgoing edge if not set
-        Vertex* from = vertices[indices[i]];
-        if (!from->outgoing)
-            from->outgoing = he;
-    }
-
-    f->edge = loop[0];
-    indicesDirty = true;
-
-    return f;
-}
-
-/**
- * Index Cache 
- */
-void Mesh::rebuildIndexCache() 
-{
-    vertexToIndex.clear();
-    vertexToIndex.reserve(vertices.size());
-
-    for (uint32_t i = 0; i < vertices.size(); ++i)
-        vertexToIndex[vertices[i]] = i;
-
-    indicesDirty = false;
-}
-
-/** 
- * Connectivity build (twin resolution) (O(E))
-*/
-bool Mesh::buildConnectivity() 
-{
-    if(indicesDirty)
-        rebuildIndexCache();
-
-    edgeLookup.clear();
-    edgeLookup.reserve(halfEdges.size());
-
-    // temporary half edge map helper
-    std::unordered_map<uint64_t, HalfEdge*> edgeMap;
-    edgeMap.reserve(halfEdges.size());
-
-    for (HalfEdge* he : halfEdges) 
-    {
-        // get directed half edge vertex indices
-        const uint32_t from = vertexToIndex[he->from()];
-        const uint32_t to   = vertexToIndex[he->to];
-
-        // calculate halfEdge keys for edgeMap
-        uint64_t key     = makeEdgeKey(from, to);
-        uint64_t twinKey = makeEdgeKey(to, from);
-
-        if (edgeLookup.contains(key))
-            return false; // duplicate directed edge
-        edgeLookup.emplace(key, he);
+        VertexIndex v0 = verts[i];
+        VertexIndex v1 = verts[(i + 1) % verts.size()];
         
-        // search for twin in edgeMap
-        auto it = edgeMap.find(twinKey);
-        if(it != edgeMap.end())
+        HalfEdgeIndex heIdx = static_cast<HalfEdgeIndex>(halfEdges_.size());
+        
+        HalfEdge he;
+        he.to   = v1;
+        he.face = faceIdx;
+        
+        halfEdges_.push_back(he);
+        faceHalfEdges.push_back(heIdx);
+
+        // Update vertex outgoing if not set
+        if(vertices_[v0].outgoing == INVALID_INDEX) 
+            vertices_[v0].outgoing = heIdx;
+        
+        // Check if the opposite half-edge (v1 -> v0) already exists
+        uint64_t twinKey = makeDirectedEdgeKey(v1, v0);
+        auto it = halfEdgeMap_.find(twinKey);
+
+        if(it != halfEdgeMap_.end())
         {
-            // if twin is in edge map -> set twin data, and remove twin from map since we found its pair
-            he->twin         = it->second;
-            it->second->twin = he;
-            edgeMap.erase(it);
+            // Twin half-edge found (v1->v0)
+            HalfEdgeIndex twinIdx = it->second;
+
+            // MANIFOLD CHECK: twin should not already have a twin
+            assert(halfEdges_[twinIdx].twin == INVALID_INDEX &&
+                "Non-Manifold edge detected: edge has more than 2 faces");
+
+            // Twin must already have an edge (edges are created alongside half-edges)
+            assert(halfEdges_[twinIdx].edge != INVALID_INDEX && 
+                   "Twin half-edge found without edge");
+        
+            // Link twins
+            halfEdges_[heIdx].twin   = twinIdx;
+            halfEdges_[twinIdx].twin = heIdx;
+            halfEdges_[heIdx].edge   = halfEdges_[twinIdx].edge; 
         }
-        else
+        else 
         {
-            //first time seeing this edge?
-            if(edgeMap.contains(key))
-                return false; // non-manifold
-            // otherwise place key in map so it's twin can find it
-            edgeMap.emplace(key, he);
-        }
-    }
-
-    return validate();
-}
-
-/** 
- * Validation
-*/
-bool Mesh::validate() const {
-    // Check half-edge invariants
-    for (HalfEdge* he : halfEdges) {
-        if (!he->to || !he->next || !he->prev || !he->face)
-            return false;
-
-        if (he->next->prev != he)
-            return false;
-
-        if (he->prev->next != he)
-            return false;
-
-        if (he->twin && he->twin->twin != he)
-            return false;
-    }
-
-    // Check face loops
-    for (Face* f : faces) {
-        if (!f->edge || !f->isValidLoop())
-            return false;
-    }
-
-    return true;
-}
-
-/** 
- * OBJ Import - for now we only import vertex and face data
-*/
-bool Mesh::loadOBJ(const std::string& filepath, bool flipYZ, bool clearMesh)
-{
-    std::ifstream file(filepath);
-    if(!file.is_open())
-    {
-        std::cerr << "Cannot open OBJ file: " << filepath << "\n";
-        return false;
-    }
-
-    return loadOBJ(file, flipYZ, clearMesh);
-}
-
-bool Mesh::loadOBJ(std::istream& in, bool flipYZ, bool clearMesh)
-{
-    if(clearMesh) clear();
-
-    struct CreaseCmd { uint32_t a, b; float sharp; };
-    std::vector<CreaseCmd> creases;
-    std::vector<uint32_t> faceIndices;
-    std::string line;
-    FaceGroup* currentGroup = nullptr;
-
-    // handle indices
-    auto resolveIndex = [&](int idx) -> uint32_t {
-        if (idx > 0) return uint32_t(idx - 1);  // OBJ is 1-based
-        return uint32_t(vertices.size() + idx); // negative index
-    };
-
-    while(std::getline(in, line))
-    {
-        if (line.empty() || line[0] == '#')
-        {
-            // ---- Crease import via comment ----
-            // # crease v0 v1 sharpness - store after connectivity
-            if (line.rfind("# crease", 0) == 0)
-            {
-                std::stringstream cs(line);
-                std::string _;
-                uint32_t a, b;
-                float sharp;
-
-                cs >> _ >> _ >> a >> b >> sharp;
-
-                creases.push_back({resolveIndex(a), resolveIndex(b), sharp});
-            }
-
-            continue;
-        }
-        std::stringstream ss(line);
-        std::string tag;
-        ss >> tag;
-
-        if(tag == "v") //< vertex 
-        {
-            float x, y, z;
-            ss >> x >> y >> z;
-            if(flipYZ) 
-                std::swap(y,z);
-            addVertex(x, y, z);
-        }
-        else if(tag == "f")
-        {
-            faceIndices.clear();
-            std::string vert;
-            while(ss >> vert)
-            {
-                size_t slash = vert.find('/');
-                uint32_t idx = std::stoi(vert.substr(0, slash));
-                faceIndices.push_back(resolveIndex(idx));
-            }
+            // No twin found yet - this is either a boundary edge or the first half-edge
+            EdgeIndex edgeIdx = static_cast<EdgeIndex>(edges_.size());
+            edges_.push_back(Edge{});
+            halfEdges_[heIdx].edge = edgeIdx;
             
-            if(faceIndices.size() > 2)
-            {
-                Face* f = addFace(faceIndices);
-                if(currentGroup)
-                    currentGroup->faces.push_back(f);
-            }
+            // Store this half-edge in the map for future twin lookup
+            uint64_t directedKey = makeDirectedEdgeKey(v0, v1);
+            halfEdgeMap_[directedKey] = heIdx;
         }
-        else if(tag == "g" || tag == "o")
+    }
+    
+    // Link half-edges in a loop (next/prev)
+    for (size_t i = 0; i < faceHalfEdges.size(); ++i) {
+        HalfEdgeIndex curr = faceHalfEdges[i];
+        HalfEdgeIndex next = faceHalfEdges[(i + 1) % faceHalfEdges.size()];
+        HalfEdgeIndex prev = faceHalfEdges[(i + faceHalfEdges.size() - 1) % faceHalfEdges.size()];
+        
+        halfEdges_[curr].next = next;
+        halfEdges_[curr].prev = prev;
+    }
+    
+    // Set face's half-edge pointer
+    face.edge = faceHalfEdges[0];
+    faces_.push_back(face);
+    faceAttributes_.push_back(FaceAttributes{});
+    
+    return faceIdx;
+}
+
+VertexIndex Mesh::getFromVertex(HalfEdgeIndex heIdx) const
+{
+    assert(heIdx < halfEdges_.size());
+
+    const HalfEdge& he = halfEdges_[heIdx];
+    
+    if (he.prev == INVALID_INDEX)
+        return INVALID_INDEX;
+    
+    return halfEdges_[he.prev].to;
+}
+
+int Mesh::getVertexValence(VertexIndex vIdx) const
+{
+    assert(vIdx < vertices_.size());
+    
+    const Vertex& v = vertices_[vIdx];
+    if (v.outgoing == INVALID_INDEX)
+        return 0; // Isolated vertex
+    
+    int valence = 0;
+    HalfEdgeIndex start = v.outgoing;
+    HalfEdgeIndex current = start;
+    
+    do 
+    {
+        valence++;
+        
+        // Move to next outgoing half-edge
+        HalfEdgeIndex twin = halfEdges_[current].twin;
+
+        if (twin == INVALID_INDEX) 
         {
-            std::string name;
-            ss >> name;
-            groups.push_back({name});
-            currentGroup = &groups.back();
+            // Boundary vertex - count edges in other direction
+            current = v.outgoing;
+            // Walk backwards until we hit boundary
+            while (true) 
+            {
+                HalfEdgeIndex prev = halfEdges_[current].prev;
+                if (prev == INVALID_INDEX) break;
+                
+                HalfEdgeIndex prevTwin = halfEdges_[prev].twin;
+                if (prevTwin == INVALID_INDEX) break;
+                
+                current = prevTwin;
+                valence++;
+            }
+            break;
         }
-    }
-
-    if(!buildConnectivity())
-        return false;
-
-    for(const auto& crease : creases)
-        applyCrease(crease.a, crease.b, crease.sharp);                  
-
-    return true;
+        
+        current = halfEdges_[twin].next;
+        
+        // Safety check for infinite loop
+        if (valence > 1000)
+            return -1; // Invalid mesh
+        
+    } 
+    while (current != start && current != INVALID_INDEX);
+    
+    return valence;
 }
 
-void Mesh::applyCrease(uint32_t a, uint32_t b, float sharpness)
+bool Mesh::isBoundaryVertex(VertexIndex vIdx) const
 {
-    if (a >= vertices.size() || b >= vertices.size())
-        return;
-
-    uint64_t key     = makeEdgeKey(a, b);
-    uint64_t twinKey = makeEdgeKey(b, a);
-
-    auto it = edgeLookup.find(key);
-    if (it == edgeLookup.end())
-        return;
-
-    HalfEdge* he = it->second;
-    he->tag = EdgeTag::EDGE_SEMI;
-    he->sharpness = sharpness;
-
-    auto jt = edgeLookup.find(twinKey);
-    if (jt != edgeLookup.end()) {
-        jt->second->tag = EdgeTag::EDGE_SEMI;
-        jt->second->sharpness = sharpness;
-    }
+    assert(vIdx < vertices_.size());
+    
+    const Vertex& v = vertices_[vIdx];
+    if (v.outgoing == INVALID_INDEX)
+        return true; // Isolated vertex is considered boundary
+    
+    // Walk around vertex and check if any half-edge has no twin
+    HalfEdgeIndex start = v.outgoing;
+    HalfEdgeIndex current = start;
+    
+    do 
+    {
+        if (halfEdges_[current].twin == INVALID_INDEX)
+            return true;
+        
+        HalfEdgeIndex twin = halfEdges_[current].twin;
+        if (twin == INVALID_INDEX)
+            return true;
+        
+        current = halfEdges_[twin].next;
+        
+        // Safety check
+        if (current == INVALID_INDEX)
+            return true;
+        
+    } 
+    while (current != start);
+    
+    return false;
 }
 
-HalfEdge* Mesh::getHalfEdge(uint32_t from, uint32_t to)
+HalfEdgeIndex Mesh::findHalfEdge(VertexIndex v0, VertexIndex v1) const
 {
-    auto it = edgeLookup.find(makeEdgeKey(from, to));
-    if(it == edgeLookup.end())
-        return nullptr;
+    uint64_t key = makeDirectedEdgeKey(v0, v1);
+    auto it = halfEdgeMap_.find(key);
+    
+    if (it == halfEdgeMap_.end())
+        return INVALID_INDEX;
+    
     return it->second;
 }
 
+EdgeIndex Mesh::findEdge(VertexIndex v0, VertexIndex v1) const
+{
+    // Try to find half-edge in either direction
+    HalfEdgeIndex he = findHalfEdge(v0, v1);
+    if (he == INVALID_INDEX)
+        he = findHalfEdge(v1, v0);
+    
+    if (he == INVALID_INDEX)
+        return INVALID_INDEX;
+    
+    return halfEdges_[he].edge;
+}
+
+// --- Validation ---
+
+bool Mesh::validate() const
+{
+    // Check all half-edges
+    for (size_t i = 0; i < halfEdges_.size(); ++i) {
+        const HalfEdge& he = halfEdges_[i];
+        
+        // Check 'to' vertex exists
+        if (he.to >= vertices_.size())
+            return false;
+        
+        // Check twin is valid
+        if (he.twin != INVALID_INDEX) 
+        {
+            if (he.twin >= halfEdges_.size())
+                return false;
+
+            // Twin's twin should point back
+            if (halfEdges_[he.twin].twin != i)
+                return false;
+
+            // Twins should share the same edge
+            if (he.edge != INVALID_INDEX && halfEdges_[he.twin].edge != he.edge)
+                return false;
+
+            // Twin should point back to the 'from' vertex
+            VertexIndex from = getFromVertex(static_cast<HalfEdgeIndex>(i));
+            if (from != INVALID_INDEX && halfEdges_[he.twin].to != from)
+                return false;
+        }
+        
+        // Check next/prev if they exist
+        if (he.next != INVALID_INDEX && he.next >= halfEdges_.size())
+            return false;
+
+        if (he.prev != INVALID_INDEX && he.prev >= halfEdges_.size())
+            return false;
+        
+        // Check edge exists
+        if (he.edge != INVALID_INDEX && he.edge >= edges_.size())
+            return false;
+        
+        // Check face exists
+        if (he.face != INVALID_INDEX && he.face >= faces_.size())
+            return false;
+        
+        // If has face, must have next and prev
+        if (he.face != INVALID_INDEX) 
+        {
+            if (he.next == INVALID_INDEX || he.prev == INVALID_INDEX)
+                return false;
+        }
+        
+        // Check next->prev consistency
+        if (he.next != INVALID_INDEX) 
+        {
+            if (halfEdges_[he.next].prev != i)
+                return false;
+        }
+        
+        // Check prev->next consistency
+        if (he.prev != INVALID_INDEX) 
+        {
+            if (halfEdges_[he.prev].next != i)
+                return false;
+        }
+    }
+    
+    // Check all faces
+    for (size_t i = 0; i < faces_.size(); ++i) 
+    {
+        const Face& f = faces_[i];
+        
+        if (f.edge >= halfEdges_.size())
+            return false;
+        
+        // Walk around face and verify loop
+        HalfEdgeIndex start = f.edge;
+        HalfEdgeIndex current = start;
+        uint32_t count = 0;
+        
+        do 
+        {
+            if (halfEdges_[current].face != i) 
+                return false;
+            
+            current = halfEdges_[current].next;
+            count++;
+            
+            if (count > f.valence + 1)
+                return false; // Loop too long
+            
+        } 
+        while (current != start && current != INVALID_INDEX);
+        
+        if (count != f.valence)
+            return false; // Valence mismatch
+    }
+    
+    // Check manifoldness: each edge should have at most 2 half-edges
+    for (size_t i = 0; i < edges_.size(); ++i) 
+    {
+        int heCount = 0;
+        for (const HalfEdge& he : halfEdges_) 
+        {
+            if (he.edge == i)
+                heCount++;
+        }
+        
+        if (heCount > 2 || heCount == 0) // Non-manifold or Orphaned edge
+            return false; 
+    }
+    
+    // Check attribute array sizes match
+    if (vertexAttributes_.size() != vertices_.size())
+        return false;
+
+    if (faceAttributes_.size() != faces_.size())
+        return false;
+    
+    return true;
+}
+
+// --- Editing support ---
+
+void Mesh::clear()
+{
+    vertices_.clear();
+    halfEdges_.clear();
+    edges_.clear();
+    faces_.clear();
+    vertexAttributes_.clear();
+    faceAttributes_.clear();
+    halfEdgeMap_.clear();
+    faceGroups_.clear();
+}
+
+void Mesh::rebuildEdgeMap()
+{
+    halfEdgeMap_.clear();
+    
+    for (size_t i = 0; i < halfEdges_.size(); ++i) 
+    {
+        const HalfEdge& he = halfEdges_[i];
+        
+        if (he.prev == INVALID_INDEX) continue;
+        
+        VertexIndex v0 = halfEdges_[he.prev].to;
+        VertexIndex v1 = he.to;
+        
+        uint64_t key = makeDirectedEdgeKey(v0, v1);
+        halfEdgeMap_[key] = static_cast<HalfEdgeIndex>(i);
+    }
+}
+
+// --- Attribute management ---
+
+void Mesh::computeFaceNormals()
+{
+    for (size_t i = 0; i < faces_.size(); ++i) 
+    {
+        const Face& face = faces_[i];
+        
+        // Get three vertices of the face to compute normal
+        HalfEdgeIndex he0 = face.edge;
+        HalfEdgeIndex he1 = halfEdges_[he0].next;
+        HalfEdgeIndex he2 = halfEdges_[he1].next;
+        
+        VertexIndex v0 = getFromVertex(he0);
+        VertexIndex v1 = halfEdges_[he0].to;
+        VertexIndex v2 = halfEdges_[he1].to;
+        
+        if (v0 == INVALID_INDEX) continue;
+        
+        const glm::vec3& p0 = vertices_[v0].position;
+        const glm::vec3& p1 = vertices_[v1].position;
+        const glm::vec3& p2 = vertices_[v2].position;
+        
+        glm::vec3 edge1 = p1 - p0;
+        glm::vec3 edge2 = p2 - p0;
+        glm::vec3 normal = glm::cross(edge1, edge2);
+        
+        float length = glm::length(normal);
+        if (length > 1e-6f) {
+            normal /= length;
+        } else {
+            normal = glm::vec3(0.0f, 1.0f, 0.0f); // Degenerate face
+        }
+        
+        faceAttributes_[i].normal = normal;
+    }
+}
+
+void Mesh::computeVertexNormals()
+{
+    // First compute face normals
+    computeFaceNormals();
+    
+    // Reset vertex normals
+    for (auto& attrib : vertexAttributes_)
+        attrib.normal = glm::vec3(0.0f);
+    
+    // Accumulate face normals to vertices (area-weighted)
+    for (size_t i = 0; i < faces_.size(); ++i) 
+    {
+        const Face& face = faces_[i];
+        const glm::vec3& faceNormal = faceAttributes_[i].normal;
+        
+        // Walk around face and add normal to each vertex
+        HalfEdgeIndex current = face.edge;
+        HalfEdgeIndex start = current;
+        
+        do 
+        {
+            VertexIndex vIdx = getFromVertex(current);
+            if (vIdx != INVALID_INDEX)
+                vertexAttributes_[vIdx].normal += faceNormal;
+            
+            current = halfEdges_[current].next;
+        } 
+        while (current != start && current != INVALID_INDEX);
+    }
+    
+    // Normalize vertex normals
+    for (auto& attrib : vertexAttributes_) 
+    {
+        float length = glm::length(attrib.normal);
+        if (length > 1e-6f)
+            attrib.normal /= length;
+        else
+            attrib.normal = glm::vec3(0.0f, 1.0f, 0.0f);
+    }
 }

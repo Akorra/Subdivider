@@ -129,12 +129,22 @@ struct FaceAttributes
 
 
 // Core data arrays - these map directly to GPU buffers
-using Vertices         = std::vector<Vertex>;
-using HalfEdges        = std::vector<HalfEdge>;
-using Edges            = std::vector<Edge>;
-using Faces            = std::vector<Face>;
-using VertexAttributes = std::vector<VertexAttributes>;
-using FaceAttributes   = std::vector<FaceAttributes>;
+using Vertices      = std::vector<Vertex>;
+using HalfEdges     = std::vector<HalfEdge>;
+using Edges         = std::vector<Edge>;
+using Faces         = std::vector<Face>;
+using VertexAttribs = std::vector<VertexAttributes>;
+using FaceAttribs   = std::vector<FaceAttributes>;
+
+/**
+ * @brief Create a directed key for a half-edge (v0 -> v1).
+ * This maintains direction, so v0->v1 and v1->v0 have different keys.
+ */
+inline uint64_t makeDirectedEdgeKey(VertexIndex v0, VertexIndex v1) 
+{
+    return (static_cast<uint64_t>(v0) << 32) | static_cast<uint64_t>(v1);
+}
+
 
 /**
  * @brief Create an undirected key for an edge (unordered pair of vertices).
