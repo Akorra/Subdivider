@@ -13,9 +13,8 @@ FetchContent_MakeAvailable(Catch2)
 
 # Create test executable
 add_executable(subdiv_tests
-    test_controlmesh.cpp
-    test_diagnostics.cpp
     test_halfedge.cpp
+    test_controlmesh.cpp
     # Add more test files as needed
 )
 

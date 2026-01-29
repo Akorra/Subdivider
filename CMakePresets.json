@@ -1,0 +1,230 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "windows-base",
+      "hidden": true,
+      "generator": "Visual Studio 18 2026",
+      "architecture": {
+        "value": "x64",
+        "strategy": "set"
+      },
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "installDir": "${sourceDir}/install/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "SUBDIV_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "description": "Debug build with all validation and asserts enabled",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SUBDIV_ENABLE_PROFILING": "OFF",
+        "SUBDIV_ENABLE_MEMORY_TRACKING": "OFF",
+        "SUBDIV_ENABLE_VALIDATION": "ON",
+        "SUBDIV_ENABLE_ASSERTS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "description": "Optimized release build (minimal diagnostics)",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SUBDIV_ENABLE_PROFILING": "OFF",
+        "SUBDIV_ENABLE_MEMORY_TRACKING": "OFF",
+        "SUBDIV_ENABLE_VALIDATION": "OFF",
+        "SUBDIV_ENABLE_ASSERTS": "OFF"
+      }
+    },
+    {
+      "name": "profile",
+      "displayName": "Profile",
+      "description": "Optimized build with profiling and memory tracking enabled",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Profile",
+        "SUBDIV_ENABLE_PROFILING": "ON",
+        "SUBDIV_ENABLE_MEMORY_TRACKING": "ON",
+        "SUBDIV_ENABLE_VALIDATION": "ON",
+        "SUBDIV_ENABLE_ASSERTS": "OFF"
+      }
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "RelWithDebInfo",
+      "description": "Optimized with debug symbols",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "SUBDIV_ENABLE_PROFILING": "OFF",
+        "SUBDIV_ENABLE_MEMORY_TRACKING": "OFF",
+        "SUBDIV_ENABLE_VALIDATION": "ON",
+        "SUBDIV_ENABLE_ASSERTS": "OFF"
+      }
+    },
+    {
+      "name": "release-safe",
+      "displayName": "Release (Safe)",
+      "description": "Release build with validation for production debugging",
+      "inherits": "windows-base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "SUBDIV_ENABLE_PROFILING": "OFF",
+        "SUBDIV_ENABLE_MEMORY_TRACKING": "OFF",
+        "SUBDIV_ENABLE_VALIDATION": "ON",
+        "SUBDIV_ENABLE_ASSERTS": "OFF"
+      }
+    },
+    {
+      "name": "debug-no-tests",
+      "displayName": "Debug (No Tests)",
+      "description": "Debug build without tests",
+      "inherits": "debug",
+      "cacheVariables": {
+        "SUBDIV_BUILD_TESTS": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug Build",
+      "configurePreset": "debug",
+      "configuration": "Debug"
+    },
+    {
+      "name": "release",
+      "displayName": "Release Build",
+      "configurePreset": "release",
+      "configuration": "Release"
+    },
+    {
+      "name": "profile",
+      "displayName": "Profile Build",
+      "configurePreset": "profile",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "relwithdebinfo",
+      "displayName": "RelWithDebInfo Build",
+      "configurePreset": "relwithdebinfo",
+      "configuration": "RelWithDebInfo"
+    },
+    {
+      "name": "release-safe",
+      "displayName": "Release Safe Build",
+      "configurePreset": "release-safe",
+      "configuration": "Release"
+    },
+    {
+      "name": "debug-no-tests",
+      "displayName": "Debug Build (No Tests)",
+      "configurePreset": "debug-no-tests",
+      "configuration": "Debug"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug Tests",
+      "configurePreset": "debug",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true,
+        "verbosity": "default"
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": false
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release Tests",
+      "configurePreset": "release",
+      "configuration": "Release",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "profile",
+      "displayName": "Profile Tests",
+      "configurePreset": "profile",
+      "configuration": "RelWithDebInfo",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
+  ],
+  "workflowPresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug Workflow",
+      "description": "Configure, build, and test in debug mode",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "debug"
+        },
+        {
+          "type": "build",
+          "name": "debug"
+        },
+        {
+          "type": "test",
+          "name": "debug"
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "displayName": "Release Workflow",
+      "description": "Configure, build, and test in release mode",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "release"
+        },
+        {
+          "type": "build",
+          "name": "release"
+        },
+        {
+          "type": "test",
+          "name": "release"
+        }
+      ]
+    },
+    {
+      "name": "profile",
+      "displayName": "Profile Workflow",
+      "description": "Configure, build, and test with profiling enabled",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "profile"
+        },
+        {
+          "type": "build",
+          "name": "profile"
+        },
+        {
+          "type": "test",
+          "name": "profile"
+        }
+      ]
+    }
+  ]
+}
