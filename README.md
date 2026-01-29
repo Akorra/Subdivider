@@ -382,184 +382,16 @@ cmake --build build/prod
 
 ---
 
-## 📚 API Documentation
-
-### Core Classes
-
-#### `ControlMesh`
-
-Main class for creating and manipulating subdivision control meshes.
-```cpp
-// Creation
-VertexIndex addVertex(const glm::vec3& pos);
-FaceIndex addFace(const std::vector<VertexIndex>& verts);
-Result<FaceIndex> tryAddFace(const std::vector<VertexIndex>& verts);
-
-// Queries
-VertexIndex getFromVertex(HalfEdgeIndex heIdx) const;
-int getVertexValence(VertexIndex vIdx) const;
-bool isBoundaryVertex(VertexIndex vIdx) const;
-HalfEdgeIndex findHalfEdge(VertexIndex v0, VertexIndex v1) const;
-EdgeIndex findEdge(VertexIndex v0, VertexIndex v1) const;
-
-// Validation
-bool validate() const;
-
-// Attributes
-void computeVertexNormals();
-void computeFaceNormals();
-
-// Statistics
-size_t numVertices() const;
-size_t numHalfEdges() const;
-size_t numEdges() const;
-size_t numFaces() const;
-```
-
-#### `Diagnostics`
-
-Global singleton for error tracking, profiling, and memory tracking.
-```cpp
-// Configuration
-static void enable(Mode mode);
-static void disable();
-static bool isEnabled();
-
-// Error Tracking
-static bool hasErrors();
-static const std::vector<ErrorInfo>& getErrors();
-static std::string getErrorSummary();
-
-// Profiling (when enabled)
-static std::string getProfilingSummary();
-
-// Full Report
-static std::string getFullReport();
-```
-
-### Data Structures
-
-<details>
-<summary><b>Vertex</b></summary>
-```cpp
-struct Vertex {
-    glm::vec3 position;           // 3D position
-    HalfEdgeIndex outgoing;       // Outgoing half-edge
-    float sharpness;              // Corner sharpness
-    bool isCorner;                // Corner vertex flag
-};
-```
-
-</details>
-
-<details>
-<summary><b>HalfEdge</b></summary>
-```cpp
-struct HalfEdge {
-    VertexIndex to;               // Destination vertex
-    HalfEdgeIndex next;           // Next in face loop
-    HalfEdgeIndex prev;           // Previous in face loop
-    HalfEdgeIndex twin;           // Opposite half-edge
-    EdgeIndex edge;               // Parent edge
-};
-```
-
-</details>
-
-<details>
-<summary><b>Edge</b></summary>
-```cpp
-struct Edge {
-    EdgeTag tag;                  // SMOOTH, CREASE, or SEMI
-    float sharpness;              // Semi-sharp sharpness
-};
-
-enum class EdgeTag {
-    EDGE_SMOOTH = 0,
-    EDGE_CREASE = 1,
-    EDGE_SEMI = 2
-};
-```
-
-</details>
-
-<details>
-<summary><b>Face</b></summary>
-```cpp
-struct Face {
-    HalfEdgeIndex edge;           // One boundary half-edge
-    uint32_t valence;             // Number of vertices
-    
-    bool isQuad() const;
-};
-```
-
-</details>
-
-### Macros
-```cpp
-// Profiling (zero overhead when disabled)
-SUBDIV_PROFILE(name)              // Profile a scope
-SUBDIV_PROFILE_FUNCTION()         // Profile current function
-
-// Memory tracking
-SUBDIV_TRACK_ALLOC(category, bytes)
-SUBDIV_TRACK_DEALLOC(category, bytes)
-
-// Assertions
-SUBDIV_ASSERT(condition, message)
-```
-
-### Error Codes
-
-| Code | Description |
-|------|-------------|
-| `FACE_TOO_FEW_VERTICES` | Face must have at least 3 vertices |
-| `INVALID_VERTEX_INDEX` | Vertex index is out of bounds |
-| `DUPLICATE_VERTEX_IN_FACE` | Face contains duplicate vertices |
-| `NON_MANIFOLD_EDGE` | Edge already has two faces |
-
----
-
-## 🧪 Testing
-
-### Run Tests
-```bash
-# Using CTest
-ctest --test-dir build --output-on-failure
-
-# Run directly
-./build/subdiv/tests/subdiv_tests
-
-# Run with verbose output
-./build/subdiv/tests/subdiv_tests -s
-
-# Run specific tests
-./build/subdiv/tests/subdiv_tests "[controlmesh]"
-./build/subdiv/tests/subdiv_tests "[diagnostics]"
-```
-
-### Test Coverage
-
-- ✅ Mesh construction and validation
-- ✅ Half-edge connectivity
-- ✅ Boundary detection
-- ✅ Manifold enforcement
-- ✅ Error handling
-- ✅ Profiling and diagnostics
-
----
-
 ## 📊 Performance
 
 Performance benchmarks on AMD Ryzen 9 5900X:
 
 | Operation | Time (Debug) | Time (Release) | Speedup |
 |-----------|--------------|----------------|---------|
-| Add 10K vertices | 1.2 ms | 0.08 ms | 15x |
-| Add 10K faces | 8.5 ms | 0.5 ms | 17x |
-| Validate mesh | 2.1 ms | 0.15 ms | 14x |
-| Compute normals | 3.4 ms | 0.2 ms | 17x |
+| Add 10K vertices | N/A | N/A | N/A |
+| Add 10K faces | N/A | N/A | N/A |
+| Validate mesh | N/A | N/A | N/A |
+| Compute normals | N/A | N/A | N/A |
 
 *Benchmarks run with profiling enabled in Profile build.*
 
@@ -572,29 +404,6 @@ HalfEdge:      20 bytes  (tightly packed)
 Edge:          8 bytes   (power-of-2)
 Face:          8 bytes   (power-of-2)
 ```
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-### Development Setup
-```bash
-git clone https://github.com/yourusername/subdivider.git
-cd subdivider
-cmake -B build/dev -DCMAKE_BUILD_TYPE=Debug -DSUBDIV_ENABLE_PROFILING=ON
-cmake --build build/dev
-ctest --test-dir build/dev --output-on-failure
-```
-
-### Guidelines
-
-1. Follow the existing code style
-2. Add tests for new features
-3. Update documentation
-4. Ensure all tests pass
-5. Profile performance-critical code
 
 ---
 
@@ -619,7 +428,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Issues**: [https://github.com/yourusername/subdivider/issues](https://github.com/yourusername/subdivider/issues)
 
 ---
-
-<p align="center">
-  Made with ❤️ for the graphics community
-</p>
