@@ -30,9 +30,18 @@ FaceIndex Mesh::addFace(const std::vector<VertexIndex>& verts)
 
     // Validate input
     if (verts.size() < 3)
-        return returnError("FACE_TOO_FEW_VERTICES", 
-                           "Face must have at least 3 vertices",
-                           "vertex count: " + std::to_string(verts.size()));
+        return returnError("FACE_TOO_FEW_VERTICES", "Face must have at least 3 vertices", "vertex count: " + std::to_string(verts.size()));
+
+    // Check all vertices exist
+    for (size_t i = 0; i < verts.size(); ++i) 
+    {
+        if (verts[i] >= vertices_.size())
+        {
+            std::ostringstream oss;
+            oss << "vertex index " << i << " = " << verts[i] << " >= " << vertices_.size();
+            return returnError("INVALID_VERTEX_INDEX", "Vertex index out of bounds", oss.str());
+        }
+    }
     
     // Check for duplicate vertices
     for (size_t i = 0; i < verts.size(); ++i) 
@@ -63,60 +72,67 @@ FaceIndex Mesh::addFace(const std::vector<VertexIndex>& verts)
     {
         VertexIndex v0 = verts[i];
         VertexIndex v1 = verts[(i + 1) % verts.size()];
-        
-        HalfEdgeIndex heIdx = static_cast<HalfEdgeIndex>(halfEdges_.size());
-        
+
+        // we can't have 2 halfedges between the same vertices have the same direction - non-manifold 
+        uint64_t directedKey = makeDirectedEdgeKey(v0, v1);
+        auto it = halfEdgeMap_.find(directedKey);
+        if (it != halfEdgeMap_.end()) 
+        {
+            std::ostringstream oss;
+            oss << "edge (" << v0 << " -> " << v1 << ") at position " << i << " - this directed edge already exists in the mesh";
+            return returnError("DUPLICATE_DIRECTED_EDGE", "Cannot create two half-edges with the same direction", oss.str());
+        }
+
+        HalfEdgeIndex heIdx   = static_cast<HalfEdgeIndex>(halfEdges_.size());
+
+        // prepare half edge
         HalfEdge he;
         he.to   = v1;
         he.face = faceIdx;
-        
-        halfEdges_.push_back(he);
-        faceHalfEdges.push_back(heIdx);
 
-        // Update vertex outgoing if not set
-        if(vertices_[v0].outgoing == INVALID_INDEX) 
-            vertices_[v0].outgoing = heIdx;
-        
         // Check if the opposite half-edge (v1 -> v0) already exists
-        uint64_t twinKey = makeDirectedEdgeKey(v1, v0);
-        auto it = halfEdgeMap_.find(twinKey);
-
-        if(it != halfEdgeMap_.end())
-        {
-            // Twin half-edge found (v1->v0)
-            HalfEdgeIndex twinIdx = it->second;
-
-            if (halfEdges_[twinIdx].twin != INVALID_INDEX) 
-            {
-                // Rollback
-                halfEdges_.resize(faceHalfEdges[0]);
-                SUBDIV_TRACK_DEALLOC("HalfEdges", sizeof(HalfEdge) * faceHalfEdges.size());
-                
-                std::ostringstream oss;
-                oss << "edge (" << v0 << ", " << v1 << ")";
-                return returnError("NON_MANIFOLD_EDGE", "Edge already has two faces (non-manifold)", oss.str());
-            }
-            
-            SUBDIV_ASSERT(halfEdges_[twinIdx].edge != INVALID_INDEX, "Twin half-edge found without edge");
+        HalfEdgeIndex twinIdx = INVALID_INDEX;
+        uint64_t      twinKey = makeDirectedEdgeKey(v1, v0);
         
+        it = halfEdgeMap_.find(twinKey);
+        if (it != halfEdgeMap_.end()) 
+        {
+            twinIdx = it->second;
+            if(halfEdges_[twinIdx].twin != INVALID_INDEX)
+            {
+                // twin already has a twin, meaning more than one face share an edge - non manifold
+                std::ostringstream oss;
+                oss << "edge (" << v0 << ", " << v1 << ") at position " << i << " - opposite edge already has two faces";
+                return returnError("NON_MANIFOLD_EDGE", "Edge would have more than two faces (non-manifold)", oss.str());
+            }
+
+            SUBDIV_ASSERT(halfEdges_[it->second].edge != INVALID_INDEX, "Twin half-edge found without edge");
+            
             // Link twins
-            halfEdges_[heIdx].twin   = twinIdx;
+            he.twin   = twinIdx;
+            he.edge   = halfEdges_[twinIdx].edge;
             halfEdges_[twinIdx].twin = heIdx;
-            halfEdges_[heIdx].edge   = halfEdges_[twinIdx].edge; 
-        }
-        else 
+        }   
+        else
         {
             // No twin found yet - this is either a boundary edge or the first half-edge
             EdgeIndex edgeIdx = static_cast<EdgeIndex>(edges_.size());
             edges_.push_back(Edge{});
-            halfEdges_[heIdx].edge = edgeIdx;
+            he.edge = edgeIdx;
 
             SUBDIV_TRACK_ALLOC("Edges", sizeof(Edge));
             
             // Store this half-edge in the map for future twin lookup
             uint64_t directedKey = makeDirectedEdgeKey(v0, v1);
             halfEdgeMap_[directedKey] = heIdx;
-        }
+        }        
+
+        halfEdges_.push_back(he);
+        faceHalfEdges.push_back(heIdx);
+
+        // Update vertex outgoing if not set
+        if(vertices_[v0].outgoing == INVALID_INDEX) 
+            vertices_[v0].outgoing = heIdx;
     }
     
     // Link half-edges in a loop (next/prev)
@@ -239,10 +255,17 @@ HalfEdgeIndex Mesh::findHalfEdge(VertexIndex v0, VertexIndex v1) const
     uint64_t key = makeDirectedEdgeKey(v0, v1);
     auto it = halfEdgeMap_.find(key);
     
-    if (it == halfEdgeMap_.end())
-        return INVALID_INDEX;
-    
-    return it->second;
+    if (it != halfEdgeMap_.end())
+        return it->second; 
+
+    // Try opposite direction and return its twin
+    uint64_t twinKey = makeDirectedEdgeKey(v1, v0);
+    it = halfEdgeMap_.find(twinKey);
+
+    if (it != halfEdgeMap_.end()) 
+        return halfEdges_[it->second].twin;  
+
+    return INVALID_INDEX;
 }
 
 EdgeIndex Mesh::findEdge(VertexIndex v0, VertexIndex v1) const
@@ -276,18 +299,40 @@ bool Mesh::validate() const
     for (size_t i = 0; i < halfEdges_.size(); ++i) {
         const HalfEdge& he = halfEdges_[i];
         
-        if (he.to >= vertices_.size()) {
+        if (he.to >= vertices_.size()) 
+        {
             addValidationError("INVALID_HALFEDGE_TO", "Half-edge 'to' vertex out of bounds", "halfedge " + std::to_string(i));
             continue;
         }
         
-        if (he.twin != INVALID_INDEX) {
+        if (he.twin != INVALID_INDEX) 
+        {
             if (he.twin >= halfEdges_.size()) 
                 addValidationError("INVALID_HALFEDGE_TWIN", "Half-edge twin out of bounds", "halfedge " + std::to_string(i));
             else if (halfEdges_[he.twin].twin != i)
                 addValidationError("BROKEN_TWIN_LINK", "Twin half-edge doesn't point back", "halfedge " + std::to_string(i));
             else if (he.edge != INVALID_INDEX && halfEdges_[he.twin].edge != he.edge)
                 addValidationError("TWIN_EDGE_MISMATCH", "Twin half-edges have different edges", "halfedge " + std::to_string(i));
+            
+            // Validate twin half-edge directions
+            const HalfEdge& twin = halfEdges_[he.twin];
+
+            // Get the 'from' vertex of current half-edge
+            VertexIndex heFrom = getFromVertex(static_cast<HalfEdgeIndex>(i));
+            if (heFrom != INVALID_INDEX) 
+            {
+                // Current: heFrom -> he.to
+                // Twin:    twin_from -> twin.to
+                // For opposite directions: twin.to should equal heFrom and he.to should equal twin_from
+                if (twin.to != heFrom)
+                    addValidationError("TWIN_WRONG_DIRECTION", "Twin half-edges don't point in opposite directions",
+                                     "halfedge " + std::to_string(i) + " points to " + std::to_string(he.to) +
+                                     ", twin points to " + std::to_string(twin.to) + " (should point to " + std::to_string(heFrom) + ")");
+                
+                VertexIndex twinFrom = getFromVertex(he.twin);
+                if (twinFrom != INVALID_INDEX && twinFrom != he.to) 
+                    addValidationError("TWIN_WRONG_DIRECTION", "Twin half-edge doesn't originate from current half-edge's destination", "halfedge " + std::to_string(i));
+            }
         }
         
         if (he.next != INVALID_INDEX && he.next >= halfEdges_.size()) 
