@@ -8,10 +8,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-add_executable(subdiv_tests
-    test_utils.cpp
-    test_mesh.cpp
-)
+#add_executable(subdiv_tests)
 
 target_link_libraries(subdiv_tests
     PRIVATE

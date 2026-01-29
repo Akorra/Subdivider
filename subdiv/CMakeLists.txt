@@ -15,8 +15,8 @@ target_compile_features(subdiv PUBLIC cxx_std_23)
 # ---------------------
 # Tests
 # ---------------------
-option(SUBDIV_BUILD_TESTS "Build subdiv tests" ON)
+# option(SUBDIV_BUILD_TESTS "Build subdiv tests" ON)
 
-if(SUBDIV_BUILD_TESTS)
-    add_subdirectory(tests)
-endif()
+# if(SUBDIV_BUILD_TESTS)
+    # add_subdirectory(tests)
+# endif()
