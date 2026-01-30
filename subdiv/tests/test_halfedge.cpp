@@ -293,7 +293,8 @@ TEST_CASE("HalfEdge - Vertex Star (One-Ring)", "[halfedge][vertex][star]")
         HalfEdgeIndex start = mesh.vertex(v0).outgoing;
         
         // Collect via twin->next traversal
-        if (start != INVALID_INDEX) {
+        if (start != INVALID_INDEX) 
+        {
             HalfEdgeIndex current = start;
             
             // Clockwise direction
@@ -301,10 +302,12 @@ TEST_CASE("HalfEdge - Vertex Star (One-Ring)", "[halfedge][vertex][star]")
                 neighbors.push_back(mesh.halfEdge(current).to);
                 
                 HalfEdgeIndex twin = mesh.halfEdge(current).twin;
-                if (twin == INVALID_INDEX) {
+                if (twin == INVALID_INDEX) 
+                {
                     // Hit boundary, walk counter-clockwise
                     current = start;
-                    while (true) {
+                    while (true) 
+                    {
                         HalfEdgeIndex prev = mesh.halfEdge(current).prev;
                         if (prev == INVALID_INDEX) break;
                         
@@ -326,6 +329,35 @@ TEST_CASE("HalfEdge - Vertex Star (One-Ring)", "[halfedge][vertex][star]")
         }
         
         // Should have collected v1, v2, v3 (order may vary)
+        REQUIRE(neighbors.size() == 2);
+        REQUIRE(std::find(neighbors.begin(), neighbors.end(), v1) != neighbors.end());
+        REQUIRE(std::find(neighbors.begin(), neighbors.end(), v2) != neighbors.end());
+    }
+
+    SECTION("Collect neighboring vertices for closed fan")
+    {
+        mesh.addFace({v0, v1, v2});
+        mesh.addFace({v0, v2, v3});
+        mesh.addFace({v0, v3, v1});
+        
+        std::vector<VertexIndex> neighbors;
+        HalfEdgeIndex start = mesh.vertex(v0).outgoing;
+        
+        if (start != INVALID_INDEX) {
+            HalfEdgeIndex current = start;
+            
+            do {
+                neighbors.push_back(mesh.halfEdge(current).to);
+                
+                HalfEdgeIndex twin = mesh.halfEdge(current).twin;
+                if (twin == INVALID_INDEX) break; // Should not happen
+                
+                current = mesh.halfEdge(twin).next;
+                
+            } while (current != start);
+        }
+        
+        // Now v0 is connected to v1, v2, and v3
         REQUIRE(neighbors.size() == 3);
         REQUIRE(std::find(neighbors.begin(), neighbors.end(), v1) != neighbors.end());
         REQUIRE(std::find(neighbors.begin(), neighbors.end(), v2) != neighbors.end());
