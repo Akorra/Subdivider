@@ -1,5 +1,6 @@
 add_library(subdiv STATIC 
     src/subdiv.cpp
+    src/control/mesh_cache.cpp
     src/control/mesh.cpp
     src/diagnostics/context.cpp
 )
