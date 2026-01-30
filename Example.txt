@@ -1,0 +1,191 @@
+#include <subdiv/subdiv.h>
+#include <subdiv/control/controlmesh.h>
+#include <subdiv/diagnostics/diagnosticscontext.h>
+#include <subdiv/config.h>
+
+#include <iostream>
+#include <vector>
+
+using namespace Subdiv;
+using namespace Subdiv::Control;
+
+int main()
+{
+    std::cout << "==============================================\n";
+    std::cout << "Subdivision Library Demo\n";
+    std::cout << "==============================================\n";
+    std::cout << "Build Configuration: " << BuildInfo::getConfigString() << "\n";
+    std::cout << "----------------------------------------------\n\n";
+    
+    // Example 1: Simple mesh without diagnostics (fastest)
+    {
+        std::cout << "Example 1: Simple mesh (no diagnostics)\n";
+        
+        ControlMesh mesh;
+        
+        auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
+        auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
+        auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
+        
+        FaceIndex face = mesh.addFace({v0, v1, v2});
+        
+        std::cout << "  Created mesh with " << mesh.numVertices() << " vertices, "
+                  << mesh.numFaces() << " faces\n";
+        std::cout << "  Face index: " << face << "\n\n";
+    }
+    
+    // Example 2: Mesh with error tracking
+    {
+        std::cout << "Example 2: Error tracking enabled\n";
+        
+        Diagnostics::enable(Diagnostics::Mode::ERRORS_ONLY);
+        
+        ControlMesh mesh;
+        
+        auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
+        auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
+        auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
+        auto v3 = mesh.addVertex({1.0f, 1.0f, 0.0f});
+        
+        // Create two triangles
+        mesh.addFace({v0, v1, v2});
+        mesh.addFace({v1, v3, v2});
+        
+        // Try to create an invalid face (duplicate vertices)
+        mesh.addFace({v0, v1, v0});
+        
+        // Try to create non-manifold edge
+        mesh.addFace({v1, v2, v3});
+        
+        if (Diagnostics::hasErrors()) {
+            std::cout << "\n" << Diagnostics::getErrorSummary() << "\n";
+        }
+        
+        // Validate mesh
+        if (mesh.validate()) {
+            std::cout << "  Mesh is valid!\n";
+        } else {
+            std::cout << "  Mesh validation failed!\n";
+        }
+        
+        Diagnostics::clear();
+        Diagnostics::disable();
+        std::cout << "\n";
+    }
+    
+    // Example 3: Profiling (only if enabled in build)
+    if constexpr (BuildInfo::profilingEnabled) {
+        std::cout << "Example 3: Profiling enabled\n";
+        
+        Diagnostics::enable(Diagnostics::Mode::ERRORS_AND_PROFILING);
+        
+        {
+            SUBDIV_PROFILE("BuildLargeMesh");
+            
+            ControlMesh mesh;
+            
+            // Create grid of vertices
+            {
+                SUBDIV_PROFILE("CreateVertices");
+                for (int y = 0; y < 100; ++y) {
+                    for (int x = 0; x < 100; ++x) {
+                        mesh.addVertex({float(x), float(y), 0.0f});
+                    }
+                }
+            }
+            
+            // Create faces
+            {
+                SUBDIV_PROFILE("CreateFaces");
+                for (int y = 0; y < 99; ++y) {
+                    for (int x = 0; x < 99; ++x) {
+                        VertexIndex v0 = y * 100 + x;
+                        VertexIndex v1 = y * 100 + (x + 1);
+                        VertexIndex v2 = (y + 1) * 100 + (x + 1);
+                        VertexIndex v3 = (y + 1) * 100 + x;
+                        
+                        mesh.addFace({v0, v1, v2, v3});
+                    }
+                }
+            }
+            
+            // Compute normals
+            {
+                SUBDIV_PROFILE("ComputeNormals");
+                mesh.computeVertexNormals();
+            }
+            
+            std::cout << "  Created " << mesh.numVertices() << " vertices, "
+                      << mesh.numFaces() << " faces\n\n";
+        }
+        
+        std::cout << Diagnostics::getProfilingSummary() << "\n";
+        
+        Diagnostics::clear();
+        Diagnostics::disable();
+    }
+    
+    // Example 4: Result-based error handling
+    {
+        std::cout << "Example 4: Result-based API\n";
+        
+        ControlMesh mesh;
+        
+        auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
+        auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
+        auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
+        
+        // Successful face creation
+        auto result1 = mesh.tryAddFace({v0, v1, v2});
+        if (result1.isOk()) {
+            std::cout << "  Successfully created face " << result1.value() << "\n";
+        }
+        
+        // Failed face creation
+        auto result2 = mesh.tryAddFace({v0, v1});  // Too few vertices
+        if (result2.isError()) {
+            std::cout << "  Error: " << result2.error().message << "\n";
+            std::cout << "  Code: " << result2.error().code << "\n";
+        }
+        
+        std::cout << "\n";
+    }
+    
+    // Example 5: RAII scope guard for diagnostics
+    {
+        std::cout << "Example 5: RAII diagnostic scope\n";
+        
+        class DiagnosticScope {
+        public:
+            DiagnosticScope(Diagnostics::Mode mode) {
+                Diagnostics::enable(mode);
+            }
+            ~DiagnosticScope() {
+                if (Diagnostics::hasErrors()) {
+                    std::cout << Diagnostics::getErrorSummary();
+                }
+                Diagnostics::disable();
+            }
+        };
+        
+        {
+            DiagnosticScope scope(Diagnostics::Mode::ERRORS_ONLY);
+            
+            ControlMesh mesh;
+            auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
+            auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
+            
+            // This will fail
+            mesh.addFace({v0, v1});
+            
+        } // Diagnostics automatically printed and disabled here
+        
+        std::cout << "\n";
+    }
+    
+    std::cout << "==============================================\n";
+    std::cout << "Demo completed successfully!\n";
+    std::cout << "==============================================\n";
+    
+    return 0;
+}
