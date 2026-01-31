@@ -1,6 +1,6 @@
-#include "mesh_cache.hpp"
+#include "control/mesh_cache.hpp"
 
-#include "mesh.hpp"
+#include "control/mesh.hpp"
 
 #include "diagnostics/context.hpp"
 
@@ -27,7 +27,7 @@ void TopologyCache::build(const Mesh& mesh)
     
     // PHASE 1: Build edge data (single pass over half-edges) =================
     
-    std::vector<size_t> edgeFaceCounts(numEdges, 0);
+    std::vector<uint32_t> edgeFaceCounts(numEdges, 0);
 
     // Single pass over half-edges
     for(HalfEdgeIndex h = 0; h < mesh.halfEdges.size(); ++h)
@@ -97,7 +97,7 @@ void TopologyCache::build(const Mesh& mesh)
 
     // PHASE 4: Count vertex-face incidence ===================================
     
-    std::vector<size_t> vertexFaceCounts(numVerts, 0);
+    std::vector<uint32_t> vertexFaceCounts(numVerts, 0);
     
     // Count faces per vertex
     for (FaceIndex f = 0; f < numFaces; ++f) 
@@ -178,7 +178,7 @@ void TopologyCache::build(const Mesh& mesh)
         const Vertex& vert = mesh.vertices[v];
         if (vert.outgoing == INVALID_INDEX) continue;
         
-        const uint32_t writeStart = oneRingWritePos[v];
+        //const uint32_t writeStart = oneRingWritePos[v];
         const uint32_t writeEnd = oneRingOffsets_[v + 1];
         
         HalfEdgeIndex start = vert.outgoing;

@@ -182,8 +182,8 @@ private:
     std::vector<uint32_t>  faceEdgeOffsets_;   // Start index per face (+1 sentinel)    
     
     // Statistics
-    size_t numBoundaryVertices_ = 0;
-    size_t numBoundaryEdges_    = 0;
+    uint64_t numBoundaryVertices_ = 0;
+    uint64_t numBoundaryEdges_    = 0;
 
     // Mesh validity flag
     bool   valid_ = false;

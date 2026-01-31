@@ -257,7 +257,7 @@ VertexIndex Mesh::getFromVertex(HalfEdgeIndex he) const
     if (he >= halfEdges.size()) return INVALID_INDEX;
     
     HalfEdgeIndex prev = halfEdges[he].prev;
-    if (isValidIndex(prev, halfEdges)) 
+    if (isValidIndex(prev, halfEdges.size())) 
         return halfEdges[prev].to;
     return INVALID_INDEX;
 }

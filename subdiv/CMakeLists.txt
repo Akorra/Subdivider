@@ -64,7 +64,7 @@ message(STATUS "----------------------------------------------")
 # ---------------------
 # Define the option if not already defined
 if(NOT DEFINED SUBDIV_BUILD_TESTS)
-    set(SUBDIV_BUILD_TESTS ON CACHE BOOL "Build subdiv tests")
+    set(SUBDIV_BUILD_TESTS OFF CACHE BOOL "Build subdiv tests")
 endif()
 
 if(SUBDIV_BUILD_TESTS)

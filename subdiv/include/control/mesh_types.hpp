@@ -8,17 +8,17 @@
 namespace Subdiv::Control
 {
 
+static constexpr uint32_t INVALID_INDEX = 0xFFFFFFFF;
+
 // #define IS_VALID_INDEX(idx, maxSize) ((idx) != INVALID_INDEX && (idx) < (maxSize))
-template <typename IndexT, typename SizeT>
-constexpr bool isValidIndex(IndexT idx, SizeT maxSize) noexcept { return idx != INVALID_INDEX && idx < maxSize; }
+template <typename IndexT>
+constexpr bool isValidIndex(IndexT idx, size_t maxSize) noexcept  {  return idx != INVALID_INDEX && static_cast<size_t>(idx) < maxSize; }
 
 // Type Aliases
 using VertexIndex   = uint32_t;
 using HalfEdgeIndex = uint32_t;
 using FaceIndex     = uint32_t;
 using EdgeIndex     = uint32_t;
-
-static constexpr uint32_t INVALID_INDEX = 0xFFFFFFFF;
 
 /**
  * @brief Edge sharpness classification for subdivision.
