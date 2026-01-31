@@ -78,6 +78,13 @@ bool App::Init()
 
     glfwMakeContextCurrent(window);
 
+    // Set user pointer for callbacks
+    glfwSetWindowUserPointer(window, this);
+
+    // Register callbacks
+    glfwSetKeyCallback(window, KeyCallback);
+    glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+
     // --- Initialize GLAD ---
     if (!gladLoadGL(glfwGetProcAddress)) 
     { 
@@ -90,17 +97,10 @@ bool App::Init()
     glEnable(GL_DEPTH_TEST);
     glLineWidth(2.0f); // Thicker wireframe lines
 
-    // Initialize projection matrix
-    projection = glm::perspective(glm::radians(45.0f), 
-                                  (float)width / (float)height, 
-                                  0.1f, 100.0f);
-    
-    // Initialize view matrix (camera position)
-    view = glm::lookAt(glm::vec3(0.0f, 2.0f, 5.0f),  // Camera position
-                       glm::vec3(0.0f, 0.0f, 0.0f),   // Look at origin
-                       glm::vec3(0.0f, 1.0f, 0.0f));  // Up vector
-    
-    // Initialize model matrix
+    // Initialize camera matrices
+    UpdateProjection();
+    UpdateCamera();
+
     model = glm::mat4(1.0f);
 
     if (!InitShaders()) return false;
@@ -272,6 +272,26 @@ void App::CleanupGL()
     delete renderMesh;
 }
 
+void App::UpdateProjection()
+{
+    float aspect = (float)width / (float)height;
+    projection = glm::perspective(glm::radians(fov), aspect, nearPlane, farPlane);
+}
+
+void App::UpdateCamera()
+{
+    // Convert spherical coordinates to cartesian
+    float yawRad = glm::radians(cameraYaw);
+    float pitchRad = glm::radians(cameraPitch);
+    
+    glm::vec3 cameraPos;
+    cameraPos.x = cameraTarget.x + cameraDistance * cos(pitchRad) * sin(yawRad);
+    cameraPos.y = cameraTarget.y + cameraDistance * sin(pitchRad);
+    cameraPos.z = cameraTarget.z + cameraDistance * cos(pitchRad) * cos(yawRad);
+    
+    view = glm::lookAt(cameraPos, cameraTarget, glm::vec3(0.0f, 1.0f, 0.0f));
+}
+
 void App::Run() {
     while (!glfwWindowShouldClose(window)) {
         ProcessInput();
@@ -283,33 +303,53 @@ void App::Run() {
     }
 }
 
+void App::KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+    App* app = static_cast<App*>(glfwGetWindowUserPointer(window));
+    if (app) {
+        app->OnKeyPress(key, action);
+    }
+}
+
+void App::FramebufferSizeCallback(GLFWwindow* window, int width, int height)
+{
+    App* app = static_cast<App*>(glfwGetWindowUserPointer(window));
+    if (app) {
+        app->OnWindowResize(width, height);
+    }
+}
+
 void App::ProcessInput() {
-    // ESC to exit (immediate, not toggle)
-    if (IsKeyPressed(GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-
-    if (IsKeyPressed(GLFW_KEY_ESCAPE) == GLFW_PRESS)
-        glfwSetWindowShouldClose(window, true);
-
-    // Toggle wireframe
-    if (IsKeyPressed(GLFW_KEY_W) == GLFW_PRESS)
-        showWireframe = !showWireframe;
+    // Continuous camera movement (hold keys)
+    float cameraSpeed = 0.1f;
     
-    // Toggle solid
-    if (IsKeyPressed(GLFW_KEY_S) == GLFW_PRESS)
-        showSolid = !showSolid;
-
-    // Optional: continuous rotation control
-    if (IsKeyPressed(GLFW_KEY_SPACE))
-        rotationAngle = 0.0f; // Reset rotation
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
+        cameraYaw -= cameraSpeed * 10.0f;
+        UpdateCamera();
+    }
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
+        cameraYaw += cameraSpeed * 10.0f;
+        UpdateCamera();
+    }
+    if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+        cameraPitch = glm::clamp(cameraPitch + cameraSpeed * 10.0f, -89.0f, 89.0f);
+        UpdateCamera();
+    }
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS) {
+        cameraPitch = glm::clamp(cameraPitch - cameraSpeed * 10.0f, -89.0f, 89.0f);
+        UpdateCamera();
+    }
 }
 
 void App::Update() {
     // Future: update mesh or UI here
 
     // Rotate the cube
-    rotationAngle += 0.01f;
-    model = glm::rotate(glm::mat4(1.0f), rotationAngle, glm::vec3(0.5f, 1.0f, 0.0f));
+    if (autoRotate)
+    {
+        rotationAngle += 0.01f;
+        model = glm::rotate(glm::mat4(1.0f), rotationAngle, glm::vec3(0.5f, 1.0f, 0.0f));
+    }
 }
 
 void App::Render() {
@@ -368,42 +408,91 @@ void App::Render() {
     glBindVertexArray(0);
 }
 
-void App::UpdateKeyStates()
+void App::OnKeyPress(int key, int action)
 {
-    // Update previous frame states
-    keyPressedLastFrame = keyPressed;
+    if (action != GLFW_PRESS) return;
     
-    // Update current frame states
-    for (auto& [key, _] : keyPressed) 
-        keyPressed[key] = (glfwGetKey(window, key) == GLFW_PRESS);
+    switch (key)
+    {
+        case GLFW_KEY_ESCAPE:
+            glfwSetWindowShouldClose(window, true);
+            break;
+            
+        case GLFW_KEY_W:
+            showWireframe = !showWireframe;
+            std::cout << "Wireframe: " << (showWireframe ? "ON" : "OFF") << "\n";
+            break;
+            
+        case GLFW_KEY_S:
+            showSolid = !showSolid;
+            std::cout << "Solid: " << (showSolid ? "ON" : "OFF") << "\n";
+            break;
+            
+        case GLFW_KEY_SPACE:
+            autoRotate = !autoRotate;
+            std::cout << "Auto-rotate: " << (autoRotate ? "ON" : "OFF") << "\n";
+            break;
+            
+        case GLFW_KEY_R:
+            rotationAngle = 0.0f;
+            std::cout << "Rotation reset\n";
+            break;
+            
+        // Camera controls
+        case GLFW_KEY_UP:
+            cameraPitch = glm::clamp(cameraPitch + 5.0f, -89.0f, 89.0f);
+            UpdateCamera();
+            break;
+            
+        case GLFW_KEY_DOWN:
+            cameraPitch = glm::clamp(cameraPitch - 5.0f, -89.0f, 89.0f);
+            UpdateCamera();
+            break;
+            
+        case GLFW_KEY_LEFT:
+            cameraYaw -= 10.0f;
+            UpdateCamera();
+            break;
+            
+        case GLFW_KEY_RIGHT:
+            cameraYaw += 10.0f;
+            UpdateCamera();
+            break;
+            
+        case GLFW_KEY_EQUAL: // Plus key (zoom in)
+        case GLFW_KEY_KP_ADD:
+            cameraDistance = glm::max(1.0f, cameraDistance - 0.5f);
+            UpdateCamera();
+            break;
+            
+        case GLFW_KEY_MINUS: // Minus key (zoom out)
+        case GLFW_KEY_KP_SUBTRACT:
+            cameraDistance = glm::min(20.0f, cameraDistance + 0.5f);
+            UpdateCamera();
+            break;
+            
+        case GLFW_KEY_HOME:
+            // Reset camera
+            cameraYaw = 0.0f;
+            cameraPitch = 30.0f;
+            cameraDistance = 5.0f;
+            UpdateCamera();
+            std::cout << "Camera reset\n";
+            break;
+    }
 }
 
-bool App::IsKeyPressed(int key)
+void App::OnWindowResize(int newWidth, int newHeight)
 {
-    // Ensure key is tracked
-    if (keyPressed.find(key) == keyPressed.end()) 
-    {
-        keyPressed[key] = false;
-        keyPressedLastFrame[key] = false;
-    }
+    width = newWidth;
+    height = newHeight;
     
-    return glfwGetKey(window, key) == GLFW_PRESS;
-}
-
-bool App::IsKeyJustPressed(int key)
-{
-    // Ensure key is tracked
-    if (keyPressed.find(key) == keyPressed.end()) 
-    {
-        keyPressed[key] = false;
-        keyPressedLastFrame[key] = false;
-    }
+    // Update OpenGL viewport
+    glViewport(0, 0, width, height);
     
-    bool currentlyPressed = glfwGetKey(window, key) == GLFW_PRESS;
-    bool wasPressed = keyPressedLastFrame[key];
+    // Update projection matrix with new aspect ratio
+    UpdateProjection();
     
-    keyPressed[key] = currentlyPressed;
-    
-    // Only true on the first frame of press
-    return currentlyPressed && !wasPressed;
+    std::cout << "Window resized to " << width << "x" << height 
+              << " (aspect: " << ((float)width / height) << ")\n";
 }

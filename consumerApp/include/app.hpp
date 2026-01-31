@@ -15,6 +15,10 @@ public:
     bool Init();
     void Run();
 
+    // Callbacks
+    void OnKeyPress(int key, int action);
+    void OnWindowResize(int width, int height);
+
 private:
     void ProcessInput();
     void Update();
@@ -24,10 +28,12 @@ private:
     bool InitMesh();
     void CleanupGL();
 
-    // Key press helpers
-    bool IsKeyPressed(int key);
-    bool IsKeyJustPressed(int key);
-    void UpdateKeyStates();
+    void UpdateProjection();
+    void UpdateCamera();
+
+    // Static callback wrappers
+    static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+    static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
 
 private:
     int width, height;
@@ -50,12 +56,22 @@ private:
     unsigned int ebo = 0;
     unsigned int wireframeEBO = 0;
 
+    // Camera parameters
+    glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);  // Look at target
+    float cameraDistance = 5.0f;                           // Distance from target
+    float cameraYaw = 0.0f;                                // Horizontal angle
+    float cameraPitch = 30.0f;                             // Vertical angle (degrees)
+    float fov = 45.0f;                                     // Field of view
+    float nearPlane = 0.1f;
+    float farPlane = 100.0f;
+
     // Rendering state
     glm::mat4 projection;
     glm::mat4 view;
     glm::mat4 model;
 
     float rotationAngle = 0.0f;
-    bool showWireframe = true;
-    bool showSolid = true;
+    bool  showWireframe = true;
+    bool  showSolid     = true;
+    bool  autoRotate    = true;
 };
