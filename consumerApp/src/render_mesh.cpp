@@ -42,21 +42,23 @@ void RenderMesh::buildTriangleIndices()
         Subdiv::Control::HalfEdgeIndex current = start;
         size_t count = 0;
         
-        do {
+        do 
+        {
             Subdiv::Control::VertexIndex v = mesh_.getFromVertex(current);
-            if (v != Subdiv::Control::INVALID_INDEX) {
+            if (v != Subdiv::Control::INVALID_INDEX) 
                 faceVerts.push_back(v);
-            }
             
             current = mesh_.halfEdges[current].next;
             count++;
             
             if (count > face.valence + 10) break; // Safety
             
-        } while (current != start && current != Subdiv::Control::INVALID_INDEX);
+        } 
+        while (current != start && current != Subdiv::Control::INVALID_INDEX);
         
         // Fan triangulation: (v0, v1, v2), (v0, v2, v3), ...
-        if (faceVerts.size() >= 3) {
+        if (faceVerts.size() >= 3)
+        {
             for (size_t i = 1; i + 1 < faceVerts.size(); ++i) {
                 triangleIndices_.push_back(faceVerts[0]);
                 triangleIndices_.push_back(faceVerts[i]);
@@ -69,14 +71,15 @@ void RenderMesh::buildTriangleIndices()
 void RenderMesh::buildWireframeIndices()
 {
     // Ensure cache is built
-    if (!mesh_.cache.isValid()) {
+    if (!mesh_.cache.isValid())
         const_cast<Subdiv::Control::Mesh&>(mesh_).buildCache();
-    }
     
     // One line per edge (v0, v1)
-    for (Subdiv::Control::EdgeIndex e = 0; e < mesh_.numEdges(); ++e) {
+    for (Subdiv::Control::EdgeIndex e = 0; e < mesh_.numEdges(); ++e) 
+    {
         auto [v0, v1] = mesh_.cache.getEdgeVertices(e);
-        if (v0 != Subdiv::Control::INVALID_INDEX && v1 != Subdiv::Control::INVALID_INDEX) {
+        if (v0 != Subdiv::Control::INVALID_INDEX && v1 != Subdiv::Control::INVALID_INDEX) 
+        {
             wireframeIndices_.push_back(v0);
             wireframeIndices_.push_back(v1);
         }
