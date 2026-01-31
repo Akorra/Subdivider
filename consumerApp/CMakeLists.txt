@@ -1,6 +1,7 @@
 add_executable(consumerApp 
     main.cpp 
     src/app.cpp
+    src/render_mesh.cpp
 )
 
 # Library headers
