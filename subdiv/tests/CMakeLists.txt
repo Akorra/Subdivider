@@ -15,6 +15,7 @@ FetchContent_MakeAvailable(Catch2)
 add_executable(subdiv_tests
     test_halfedge.cpp
     test_controlmesh.cpp
+    test_meshcache.cpp
     # Add more test files as needed
 )
 

@@ -1,6 +1,9 @@
 #include <catch2/catch_test_macros.hpp>
+
 #include "control/mesh.hpp"
 #include "diagnostics/context.hpp"
+
+#include <glm/gtc/constants.hpp>
 
 using namespace Subdiv::Control;
 using namespace Subdiv::Diagnostics;
@@ -17,17 +20,18 @@ public:
     }
 };
 
-TEST_CASE("Mesh - Basic Construction", "[mesh]")
+TEST_CASE("Mesh - Basic Construction", "[mesh][construction]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
     
     SECTION("Empty mesh has zero elements")
     {
-        REQUIRE(mesh.numVertices() == 0);
-        REQUIRE(mesh.numFaces() == 0);
-        REQUIRE(mesh.numEdges() == 0);
+        REQUIRE(mesh.numVertices()  == 0);
+        REQUIRE(mesh.numFaces()     == 0);
+        REQUIRE(mesh.numEdges()     == 0);
         REQUIRE(mesh.numHalfEdges() == 0);
+        REQUIRE(mesh.isEmpty());
     }
     
     SECTION("Add single vertex")
@@ -36,9 +40,9 @@ TEST_CASE("Mesh - Basic Construction", "[mesh]")
         
         REQUIRE(v0 == 0);
         REQUIRE(mesh.numVertices() == 1);
-        REQUIRE(mesh.vertex(v0).position.x == 0.0f);
-        REQUIRE(mesh.vertex(v0).position.y == 0.0f);
-        REQUIRE(mesh.vertex(v0).position.z == 0.0f);
+        REQUIRE(mesh.positions[v0].x == 0.0f);
+        REQUIRE(mesh.positions[v0].y == 0.0f);
+        REQUIRE(mesh.positions[v0].z == 0.0f);
     }
     
     SECTION("Add multiple vertices")
@@ -51,10 +55,14 @@ TEST_CASE("Mesh - Basic Construction", "[mesh]")
         REQUIRE(v0 == 0);
         REQUIRE(v1 == 1);
         REQUIRE(v2 == 2);
+
+        REQUIRE(mesh.positions[v0] == glm::vec3(0.0f, 0.0f, 0.0f));
+        REQUIRE(mesh.positions[v1] == glm::vec3(1.0f, 0.0f, 0.0f));
+        REQUIRE(mesh.positions[v2] == glm::vec3(0.0f, 1.0f, 0.0f));
     }
 }
 
-TEST_CASE("Mesh - Triangle Face", "[mesh][face]")
+TEST_CASE("Mesh - Triangle Face", "[mesh][face][construction]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -69,12 +77,10 @@ TEST_CASE("Mesh - Triangle Face", "[mesh][face]")
         
         REQUIRE(face != INVALID_INDEX);
         REQUIRE(!Context::hasErrors());
-        REQUIRE(mesh.numFaces() == 1);
-        REQUIRE(mesh.numHalfEdges() == 3);
-        REQUIRE(mesh.numEdges() == 3);
-        
-        // Check face valence
-        REQUIRE(mesh.face(face).valence == 3);
+        REQUIRE(mesh.numFaces()          == 1);
+        REQUIRE(mesh.numEdges()          == 3);
+        REQUIRE(mesh.numHalfEdges()      == 3);
+        REQUIRE(mesh.faces[face].valence == 3);
     }
     
     SECTION("Face with too few vertices should fail")
@@ -114,23 +120,46 @@ TEST_CASE("Mesh - Triangle Face", "[mesh][face]")
     }
 }
 
-TEST_CASE("Mesh - Quad Face", "[mesh][face]")
+TEST_CASE("Mesh - Quad Face", "[mesh][face][construction]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
     
-    auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
-    auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
-    auto v2 = mesh.addVertex({1.0f, 1.0f, 0.0f});
-    auto v3 = mesh.addVertex({0.0f, 1.0f, 0.0f});
+    auto v0 = mesh.addVertex({-1.0f, -1.0f, 0.0f});
+    auto v1 = mesh.addVertex({ 1.0f, -1.0f, 0.0f});
+    auto v2 = mesh.addVertex({ 1.0f,  1.0f, 0.0f});
+    auto v3 = mesh.addVertex({-1.0f,  1.0f, 0.0f});
     
     FaceIndex face = mesh.addFace({v0, v1, v2, v3});
     
     REQUIRE(face != INVALID_INDEX);
     REQUIRE(!Context::hasErrors());
-    REQUIRE(mesh.face(face).valence == 4);
-    REQUIRE(mesh.numHalfEdges() == 4);
-    REQUIRE(mesh.numEdges() == 4);
+    REQUIRE(mesh.numFaces()          == 1);
+    REQUIRE(mesh.numEdges()          == 4);
+    REQUIRE(mesh.numHalfEdges()      == 4);
+    REQUIRE(mesh.faces[face].valence == 4);
+}
+
+TEST_CASE("Mesh - NGon Face", "[mesh][face][construction]")
+{
+    DiagnosticTestScope diag;
+    Mesh mesh;
+
+    std::vector<VertexIndex> verts;
+    for(int i = 0; i < 5; ++i)
+    {
+        float angle = i * 2.0f * glm::pi<float>() / 5;
+        verts.push_back(mesh.addVertex({glm::cos(angle), glm::sin(angle), 0}));
+    }
+    
+    FaceIndex face = mesh.addFace(verts);
+    
+    REQUIRE(face != INVALID_INDEX);
+    REQUIRE(!Context::hasErrors());
+    REQUIRE(mesh.numFaces()          == 1);
+    REQUIRE(mesh.numEdges()          == 5);
+    REQUIRE(mesh.numHalfEdges()      == 5);
+    REQUIRE(mesh.faces[face].valence == 5);
 }
 
 TEST_CASE("Mesh - Manifold Mesh", "[mesh][manifold]")
@@ -160,13 +189,15 @@ TEST_CASE("Mesh - Manifold Mesh", "[mesh][manifold]")
         REQUIRE(mesh.validate());
     }
     
-    SECTION("Non-manifold edge should fail")
+    SECTION("Non-manifold edge should fail - third face on edge")
     {
-        mesh.addFace({v0, v1, v2});
-        mesh.addFace({v1, v3, v2});
+        auto v4 = mesh.addVertex({0.5f, 0.5f, 1.0f});
         
-        // Third face sharing edge v1-v2 would be non-manifold
-        FaceIndex f2 = mesh.addFace({v1, v2, v3});
+        mesh.addFace({v0, v1, v2});
+        mesh.addFace({v1, v0, v3}); // Twin edge v0-v1
+        
+        // Third face sharing edge v0-v1 would be non-manifold
+        FaceIndex f2 = mesh.addFace({v0, v1, v4});
         
         REQUIRE(f2 == INVALID_INDEX);
         REQUIRE(Context::hasErrors());
@@ -227,8 +258,8 @@ TEST_CASE("Mesh - Duplicate Directed Edge", "[mesh][direction][error]")
         
         REQUIRE(he01 != INVALID_INDEX);
         REQUIRE(he10 != INVALID_INDEX);
-        REQUIRE(mesh.halfEdge(he01).twin == he10);
-        REQUIRE(mesh.halfEdge(he10).twin == he01);
+        REQUIRE(mesh.halfEdges[he01].twin == he10);
+        REQUIRE(mesh.halfEdges[he10].twin == he01);
     }
 }
 
@@ -250,7 +281,7 @@ TEST_CASE("Mesh - findHalfEdge", "[mesh][halfedge][query]")
         HalfEdgeIndex he = mesh.findHalfEdge(v0, v1);
         
         REQUIRE(he != INVALID_INDEX);
-        REQUIRE(mesh.halfEdge(he).to == v1);
+        REQUIRE(mesh.halfEdges[he].to == v1);
     }
     
     SECTION("Find half-edge via twin (not in map)")
@@ -266,12 +297,12 @@ TEST_CASE("Mesh - findHalfEdge", "[mesh][halfedge][query]")
         REQUIRE(he10 != INVALID_INDEX);
         
         // Verify they point in correct directions
-        REQUIRE(mesh.halfEdge(he01).to == v1);
-        REQUIRE(mesh.halfEdge(he10).to == v0);
+        REQUIRE(mesh.halfEdges[he01].to == v1);
+        REQUIRE(mesh.halfEdges[he10].to == v0);
         
         // Verify they are twins
-        REQUIRE(mesh.halfEdge(he01).twin == he10);
-        REQUIRE(mesh.halfEdge(he10).twin == he01);
+        REQUIRE(mesh.halfEdges[he01].twin == he10);
+        REQUIRE(mesh.halfEdges[he10].twin == he01);
     }
     
     SECTION("Boundary edge only findable in one direction")
@@ -281,7 +312,7 @@ TEST_CASE("Mesh - findHalfEdge", "[mesh][halfedge][query]")
         // v0->v1 exists (boundary)
         HalfEdgeIndex he01 = mesh.findHalfEdge(v0, v1);
         REQUIRE(he01 != INVALID_INDEX);
-        REQUIRE(mesh.halfEdge(he01).isBoundary());
+        REQUIRE(mesh.halfEdges[he01].twin == INVALID_INDEX); //< is boundary test
         
         // v1->v0 doesn't exist
         HalfEdgeIndex he10 = mesh.findHalfEdge(v1, v0);
@@ -322,7 +353,6 @@ TEST_CASE("Mesh - findEdge", "[mesh][edge][query]")
     auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
     auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
     auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
-    auto v3 = mesh.addVertex({1.0f, 1.0f, 0.0f});
     
     mesh.addFace({v0, v1, v2});
     
@@ -340,129 +370,9 @@ TEST_CASE("Mesh - findEdge", "[mesh][edge][query]")
     
     SECTION("Non-existent edge returns INVALID")
     {
+        auto v3 = mesh.addVertex({1.0f, 1.0f, 0.0f});
         EdgeIndex edge = mesh.findEdge(v0, v3);
         REQUIRE(edge == INVALID_INDEX);
-    }
-}
-
-TEST_CASE("Mesh - HalfEdge Connectivity", "[mesh][halfedge][connectivity]")
-{
-    DiagnosticTestScope diag;
-    Mesh mesh;
-    
-    auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
-    auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
-    auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
-    
-    mesh.addFace({v0, v1, v2});
-    
-    SECTION("Next/prev form a loop")
-    {
-        HalfEdgeIndex he = mesh.findHalfEdge(v0, v1);
-        REQUIRE(he != INVALID_INDEX);
-        
-        HalfEdgeIndex next = mesh.halfEdge(he).next;
-        HalfEdgeIndex prev = mesh.halfEdge(he).prev;
-        
-        REQUIRE(next != INVALID_INDEX);
-        REQUIRE(prev != INVALID_INDEX);
-        
-        // next->prev should point back
-        REQUIRE(mesh.halfEdge(next).prev == he);
-        // prev->next should point back
-        REQUIRE(mesh.halfEdge(prev).next == he);
-        
-        // Loop should close
-        HalfEdgeIndex current = he;
-        int count = 0;
-        do {
-            current = mesh.halfEdge(current).next;
-            count++;
-        } while (current != he && count < 10);
-        
-        REQUIRE(count == 3); // Triangle
-    }
-    
-    SECTION("Twin connectivity")
-    {
-        auto v3 = mesh.addVertex({1.0f, 1.0f, 0.0f});
-        mesh.addFace({v1, v0, v3});
-        
-        HalfEdgeIndex he01 = mesh.findHalfEdge(v0, v1);
-        HalfEdgeIndex he10 = mesh.findHalfEdge(v1, v0);
-        
-        REQUIRE(!mesh.halfEdge(he01).isBoundary());
-        REQUIRE(!mesh.halfEdge(he10).isBoundary());
-        
-        // Twin of twin should be self
-        REQUIRE(mesh.halfEdge(mesh.halfEdge(he01).twin).twin == he01);
-    }
-}
-
-TEST_CASE("Mesh - Boundary Detection", "[mesh][boundary]")
-{
-    DiagnosticTestScope diag;
-    Mesh mesh;
-    
-    auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
-    auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
-    auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
-    
-    mesh.addFace({v0, v1, v2});
-    
-    SECTION("All vertices on single face are boundary")
-    {
-        REQUIRE(mesh.isBoundaryVertex(v0));
-        REQUIRE(mesh.isBoundaryVertex(v1));
-        REQUIRE(mesh.isBoundaryVertex(v2));
-    }
-    
-    SECTION("Vertex with closed fan is not boundary")
-    {
-        auto v3 = mesh.addVertex({1.0f, 1.0f, 0.0f});
-        
-        // Create closed quad (two triangles)
-        mesh.addFace({v0, v2, v3});
-        mesh.addFace({v0, v3, v1});
-        
-        // v0 is interior (shared by 3 faces, all edges have twins)
-        // This would need proper closed fan, but this tests the concept
-    }
-}
-
-TEST_CASE("Mesh - Vertex Valence", "[mesh][vertex][valence]")
-{
-    DiagnosticTestScope diag;
-    Mesh mesh;
-    
-    auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
-    auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
-    auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
-    
-    SECTION("Isolated vertex has valence 0")
-    {
-        REQUIRE(mesh.getVertexValence(v0) == 0);
-    }
-    
-    SECTION("Vertex in triangle has valence 2")
-    {
-        mesh.addFace({v0, v1, v2});
-        
-        REQUIRE(mesh.getVertexValence(v0) == 2);
-        REQUIRE(mesh.getVertexValence(v1) == 2);
-        REQUIRE(mesh.getVertexValence(v2) == 2);
-    }
-    
-    SECTION("Interior vertex has higher valence")
-    {
-        auto v3 = mesh.addVertex({1.0f, 1.0f, 0.0f});
-        
-        mesh.addFace({v0, v1, v2});
-        mesh.addFace({v1, v3, v2});
-        
-        // v1 and v2 are shared by 2 faces
-        REQUIRE(mesh.getVertexValence(v1) == 3);
-        REQUIRE(mesh.getVertexValence(v2) == 3);
     }
 }
 
@@ -485,6 +395,7 @@ TEST_CASE("Mesh - Clear", "[mesh]")
     REQUIRE(mesh.numFaces() == 0);
     REQUIRE(mesh.numEdges() == 0);
     REQUIRE(mesh.numHalfEdges() == 0);
+    REQUIRE(!mesh.cache.isValid());
 }
 
 TEST_CASE("Mesh - Complex Geometry", "[mesh][complex]")
@@ -520,5 +431,53 @@ TEST_CASE("Mesh - Complex Geometry", "[mesh][complex]")
         REQUIRE(faceCount == 4);
         REQUIRE(!Context::hasErrors());
         REQUIRE(mesh.validate());
+    }
+}
+
+TEST_CASE("Mesh - Vertex Position", "[mesh][attributes]")
+{
+    DiagnosticTestScope diag;
+    Mesh mesh;
+    
+    auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
+    
+    SECTION("Set position")
+    {
+        mesh.setPosition(v0, {1.0f, 2.0f, 3.0f});
+        REQUIRE(mesh.positions[v0] == glm::vec3(1.0f, 2.0f, 3.0f));
+    }
+}
+
+TEST_CASE("Mesh - Edge Attributes", "[mesh][attributes]")
+{
+    DiagnosticTestScope diag;
+    Mesh mesh;
+    
+    auto v0 = mesh.addVertex({0.0f, 0.0f, 0.0f});
+    auto v1 = mesh.addVertex({1.0f, 0.0f, 0.0f});
+    auto v2 = mesh.addVertex({0.0f, 1.0f, 0.0f});
+    
+    mesh.addFace({v0, v1, v2});
+    
+    EdgeIndex e = mesh.findEdge(v0, v1);
+    
+    SECTION("Default is smooth")
+    {
+        REQUIRE(mesh.edges[e].tag == EdgeTag::SMOOTH);
+        REQUIRE(mesh.edges[e].sharpness == 0.0f);
+    }
+    
+    SECTION("Set crease")
+    {
+        mesh.setEdgeCrease(e, true);
+        REQUIRE(mesh.edges[e].tag == EdgeTag::CREASE);
+        REQUIRE(mesh.edges[e].sharpness == 1.0f);
+    }
+    
+    SECTION("Set semi-sharp")
+    {
+        mesh.setEdgeSharpness(e, 0.5f);
+        REQUIRE(mesh.edges[e].tag == EdgeTag::SEMI);
+        REQUIRE(mesh.edges[e].sharpness == 0.5f);
     }
 }

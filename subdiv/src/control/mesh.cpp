@@ -27,6 +27,11 @@ VertexIndex Mesh::addVertex(const glm::vec3& pos)
     return idx;
 }
 
+FaceIndex Mesh::addFace(std::initializer_list<VertexIndex> verts) 
+{ 
+    return addFace(std::span<const VertexIndex>(verts)); 
+}
+
 FaceIndex Mesh::addFace(std::span<const VertexIndex> verts)
 {
     // Validation =============================================================
@@ -69,7 +74,7 @@ FaceIndex Mesh::addFace(std::span<const VertexIndex> verts)
         // Check if this directed edge already exists
         if (halfEdgeMap_.find(key) != halfEdgeMap_.end()) 
         {
-            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"DUPLICATE_DIRECTED_EDGE", "Directed edge already exists", "Edge " + std::to_string(v0) + "->" + std::to_string(v1) + " at position " + std::to_string(i));
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"NON_MANIFOLD_EDGE", "Directed edge already exists", "Edge " + std::to_string(v0) + "->" + std::to_string(v1) + " at position " + std::to_string(i));
             return INVALID_INDEX;
         }
 
@@ -250,6 +255,16 @@ HalfEdgeIndex Mesh::findHalfEdge(VertexIndex v0, VertexIndex v1) const
         return halfEdges[it->second].twin;
     
     return INVALID_INDEX;
+}
+
+EdgeIndex Mesh::findEdge(VertexIndex v0, VertexIndex v1) const
+{
+    HalfEdgeIndex he = findHalfEdge(v0, v1);
+    if(he == INVALID_INDEX)
+        he = findHalfEdge(v1, v0);
+    if(he == INVALID_INDEX)
+        return INVALID_INDEX;
+    return halfEdges[he].edge;
 }
 
 VertexIndex Mesh::getFromVertex(HalfEdgeIndex he) const

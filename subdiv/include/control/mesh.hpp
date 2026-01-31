@@ -25,6 +25,7 @@ public:
     ~Mesh() { clear(); }
 
     VertexIndex addVertex(const glm::vec3& pos);
+    FaceIndex   addFace(std::initializer_list<VertexIndex> verts); 
     FaceIndex   addFace(std::span<const VertexIndex> verts);
 
     void setPosition(VertexIndex v, const glm::vec3& pos);
@@ -48,7 +49,8 @@ public:
     std::array<VertexIndex, 2>   getEdgeVertices(EdgeIndex e) const;
 
     HalfEdgeIndex findHalfEdge(VertexIndex v0, VertexIndex v1) const;
-    VertexIndex getFromVertex(HalfEdgeIndex he) const;
+    EdgeIndex     findEdge(VertexIndex v0, VertexIndex v1) const;
+    VertexIndex   getFromVertex(HalfEdgeIndex he) const;
 
     // Topology Cache =========================================================
 
