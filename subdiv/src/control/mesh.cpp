@@ -1,255 +1,237 @@
 #include "control/mesh.hpp"
-
 #include "diagnostics/context.hpp"
 
-#include <cassert>
+#include <unordered_set>
+#include <algorithm>
 
-namespace Subdiv::Control 
+namespace Subdiv::Control
 {
-
-// --- Element creation ---
+// Construction & Editing =====================================================
 
 VertexIndex Mesh::addVertex(const glm::vec3& pos)
 {
-    VertexIndex idx = static_cast<VertexIndex>(vertices_.size());
-    vertices_.push_back(Vertex{pos});
-    vertexAttributes_.push_back(VertexAttributes{});
+    VertexIndex idx = static_cast<VertexIndex>(vertices.size());
+
+    Vertex v;
+    v.outgoing  = INVALID_INDEX;
+    v.sharpness = 0.0f;
+    v.isCorner  = 0;
+
+    vertices.push_back(v);
+    positions.push_back(pos);
+    normals.push_back(glm::vec3(0.0f, 1.0f, 0.0f));
+    uvs.push_back(glm::vec2(0.0f));
+
+    invalidateCache();
+    
     return idx;
 }
 
-FaceIndex Mesh::addFace(const std::vector<VertexIndex>& verts)
+FaceIndex Mesh::addFace(std::span<const VertexIndex> verts)
 {
-    SUBDIV_PROFILE_FUNCTION();
-    
-    // Helper lambda to return error
-    auto returnError = [&](const std::string& code, const std::string& message, 
-                          const std::string& context = "") -> FaceIndex {
-        SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR, code, message, context);
+    // Validation =============================================================
+    if(verts.size() < 3)
+    {
+        SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"FACE_TOO_FEW_VERTICES", "Face must have at least 3 vertices", "Got " + std::to_string(verts.size()) + " vertices");
         return INVALID_INDEX;
-    };
-
-    // Validate input
-    if (verts.size() < 3)
-        return returnError("FACE_TOO_FEW_VERTICES", "Face must have at least 3 vertices", "vertex count: " + std::to_string(verts.size()));
+    }
 
     // Check all vertices exist
     for (size_t i = 0; i < verts.size(); ++i) 
     {
-        if (verts[i] >= vertices_.size())
+        if (verts[i] >= vertices.size()) 
         {
-            std::ostringstream oss;
-            oss << "vertex index " << i << " = " << verts[i] << " >= " << vertices_.size();
-            return returnError("INVALID_VERTEX_INDEX", "Vertex index out of bounds", oss.str());
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_VERTEX_INDEX","Vertex index out of bounds", "Vertex " + std::to_string(verts[i]) + " at position " + std::to_string(i));
+            return INVALID_INDEX;
         }
     }
-    
-    // Check for duplicate vertices
+
+    // Check for duplicate vertices in face
+    std::unordered_set<VertexIndex> vertSet;
     for (size_t i = 0; i < verts.size(); ++i) 
     {
-        for (size_t j = i + 1; j < verts.size(); ++j) 
+        if (!vertSet.insert(verts[i]).second) 
         {
-            if (verts[i] == verts[j]) 
-            {
-                std::ostringstream oss;
-                oss << "vertex " << verts[i] << " at positions " << i << " and " << j;
-                return returnError("DUPLICATE_VERTEX_IN_FACE", "Face contains duplicate vertex", oss.str());
-            }
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"DUPLICATE_VERTEX_IN_FACE", "Face contains duplicate vertex", "Vertex " + std::to_string(verts[i]) + " appears multiple times");
+            return INVALID_INDEX;
         }
     }
-    
-    FaceIndex faceIdx = static_cast<FaceIndex>(faces_.size());
-    Face face;
-    face.valence = static_cast<uint32_t>(verts.size());
 
-    // Track memory allocation
-    SUBDIV_TRACK_ALLOC("HalfEdges", sizeof(HalfEdge) * verts.size());
-    
-    // Create half-edges for this face
-    std::vector<HalfEdgeIndex> faceHalfEdges;
-    faceHalfEdges.reserve(verts.size());
-    
+    // Check for duplicate directed edges and non-manifold edges
     for (size_t i = 0; i < verts.size(); ++i) 
     {
         VertexIndex v0 = verts[i];
         VertexIndex v1 = verts[(i + 1) % verts.size()];
 
-        // we can't have 2 halfedges between the same vertices have the same direction - non-manifold 
-        uint64_t directedKey = makeDirectedEdgeKey(v0, v1);
-        auto it = halfEdgeMap_.find(directedKey);
-        if (it != halfEdgeMap_.end()) 
+        uint64_t key     = makeDirectedEdgeKey(v0, v1);
+        uint64_t twinKey = makeDirectedEdgeKey(v1, v0);
+        
+        // Check if this directed edge already exists
+        if (halfEdgeMap_.find(key) != halfEdgeMap_.end()) 
         {
-            std::ostringstream oss;
-            oss << "edge (" << v0 << " -> " << v1 << ") at position " << i << " - this directed edge already exists in the mesh";
-            return returnError("NON_MANIFOLD_EDGE", "Cannot create two half-edges with the same direction", oss.str());
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"DUPLICATE_DIRECTED_EDGE", "Directed edge already exists", "Edge " + std::to_string(v0) + "->" + std::to_string(v1) + " at position " + std::to_string(i));
+            return INVALID_INDEX;
         }
 
-        HalfEdgeIndex heIdx   = static_cast<HalfEdgeIndex>(halfEdges_.size());
-
-        // prepare half edge
-        HalfEdge he;
-        he.to   = v1;
-        he.face = faceIdx;
-
-        // Check if the opposite half-edge (v1 -> v0) already exists
-        HalfEdgeIndex twinIdx = INVALID_INDEX;
-        uint64_t      twinKey = makeDirectedEdgeKey(v1, v0);
-        
-        it = halfEdgeMap_.find(twinKey);
-        if (it != halfEdgeMap_.end()) 
+        // Check if twin edge exists and already has a twin (non-manifold)
+        auto twinIt = halfEdgeMap_.find(twinKey);
+        if (twinIt != halfEdgeMap_.end()) 
         {
-            twinIdx = it->second;
-            if(halfEdges_[twinIdx].twin != INVALID_INDEX)
+            HalfEdgeIndex twinHe = twinIt->second;
+            if (halfEdges[twinHe].twin != INVALID_INDEX) 
             {
-                // twin already has a twin, meaning more than one face share an edge - non manifold
-                std::ostringstream oss;
-                oss << "edge (" << v0 << ", " << v1 << ") at position " << i << " - opposite edge already has two faces";
-                return returnError("NON_MANIFOLD_EDGE", "Edge would have more than two faces (non-manifold)", oss.str());
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"NON_MANIFOLD_EDGE", "Edge would have more than 2 faces", "Edge " + std::to_string(v0) + "->" +  std::to_string(v1));
+                return INVALID_INDEX;
+            }
+        }
+    }
+
+    // Create Face ============================================================
+    
+    FaceIndex faceIdx = static_cast<FaceIndex>(faces.size());
+    
+    Face face;
+    face.valence = static_cast<uint32_t>(verts.size());
+    face.edge    = static_cast<HalfEdgeIndex>(halfEdges.size()); // Will be first half-edge
+    
+    faces.push_back(face);
+
+    // Create Half-Edges ======================================================
+
+    HalfEdgeIndex firstHe = static_cast<HalfEdgeIndex>(halfEdges.size());
+
+    for(size_t i=0; i < verts.size(); ++i)
+    {
+        VertexIndex v0 = verts[i];
+        VertexIndex v1 = verts[(i + 1) % verts.size()];
+
+        HalfEdgeIndex heIdx = static_cast<HalfEdgeIndex>(halfEdges.size());
+
+        HalfEdge he;
+        he.to = v1;
+        he.face = faceIdx;
+        he.next = (i + 1 < verts.size()) ? heIdx + 1 : firstHe;
+        he.prev = (i > 0) ? heIdx - 1 : firstHe + static_cast<HalfEdgeIndex>(verts.size() - 1);
+        he.twin = INVALID_INDEX;
+        he.edge = INVALID_INDEX;
+
+        // Check if twin exists
+        uint64_t twinKey = makeDirectedEdgeKey(v1, v0);
+        auto twinIt = halfEdgeMap_.find(twinKey);
+
+        if (twinIt != halfEdgeMap_.end()) 
+        {
+            // Twin exists - link them and reuse edge
+            HalfEdgeIndex twinIdx = twinIt->second;
+
+            // Ensure twin doesn't already have a twin
+            if (halfEdges[twinIdx].twin != INVALID_INDEX) 
+            {
+                // This should never happen due to pre-validation, but double-check
+                // Roll back the face we just added
+                faces.pop_back();
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"NON_MANIFOLD_EDGE_DURING_CREATION", "Found twin that already has a twin during half-edge creation", "Edge between vertices " + std::to_string(v0) + " and " + std::to_string(v1) + " - this indicates a validation bug or concurrent modification");
+                return INVALID_INDEX;
             }
 
-            SUBDIV_ASSERT(halfEdges_[it->second].edge != INVALID_INDEX, "Twin half-edge found without edge");
+            he.twin = twinIdx;
+            he.edge = halfEdges[twinIdx].edge;
             
-            // Link twins
-            he.twin   = twinIdx;
-            he.edge   = halfEdges_[twinIdx].edge;
-            halfEdges_[twinIdx].twin = heIdx;
-        }   
-        else
+            halfEdges.push_back(he);
+            
+            // Link twin back
+            halfEdges[twinIdx].twin = heIdx;
+        } 
+        else 
         {
-            // No twin found yet - this is either a boundary edge or the first half-edge
-            EdgeIndex edgeIdx = static_cast<EdgeIndex>(edges_.size());
-            edges_.push_back(Edge{});
+            // No twin - create new edge
+            EdgeIndex edgeIdx = static_cast<EdgeIndex>(edges.size());
             he.edge = edgeIdx;
-
-            SUBDIV_TRACK_ALLOC("Edges", sizeof(Edge));
             
-            // Store this half-edge in the map for future twin lookup
-            halfEdgeMap_[directedKey] = heIdx;
-        }        
+            Edge edge;
+            edge.tag = EdgeTag::SMOOTH;
+            edge.sharpness = 0.0f;
+            edges.push_back(edge);
+            
+            halfEdges.push_back(he);
+        }
 
-        halfEdges_.push_back(he);
-        faceHalfEdges.push_back(heIdx);
-
-        // Update vertex outgoing if not set
-        if(vertices_[v0].outgoing == INVALID_INDEX) 
-            vertices_[v0].outgoing = heIdx;
-    }
-    
-    // Link half-edges in a loop (next/prev)
-    for (size_t i = 0; i < faceHalfEdges.size(); ++i) {
-        HalfEdgeIndex curr = faceHalfEdges[i];
-        HalfEdgeIndex next = faceHalfEdges[(i + 1) % faceHalfEdges.size()];
-        HalfEdgeIndex prev = faceHalfEdges[(i + faceHalfEdges.size() - 1) % faceHalfEdges.size()];
+        // Add to map
+        uint64_t directedKey = makeDirectedEdgeKey(v0, v1);
+        halfEdgeMap_[directedKey] = heIdx;
         
-        halfEdges_[curr].next = next;
-        halfEdges_[curr].prev = prev;
+        // Update vertex outgoing
+        if (vertices[v0].outgoing == INVALID_INDEX)
+            vertices[v0].outgoing = heIdx;
     }
-    
-    // Set face's half-edge pointer
-    face.edge = faceHalfEdges[0];
-    faces_.push_back(face);
-    faceAttributes_.push_back(FaceAttributes{});
 
-    SUBDIV_TRACK_ALLOC("Faces", sizeof(Face) + sizeof(FaceAttributes));
-    
+    invalidateCache();
+
     return faceIdx;
 }
 
-VertexIndex Mesh::getFromVertex(HalfEdgeIndex heIdx) const
+void Mesh::setPosition(VertexIndex v, const glm::vec3& pos)
 {
-    assert(heIdx < halfEdges_.size());
-
-    const HalfEdge& he = halfEdges_[heIdx];
-    
-    if (he.prev == INVALID_INDEX)
-        return INVALID_INDEX;
-    
-    return halfEdges_[he.prev].to;
+    if (v >= positions.size()) return;
+    positions[v] = pos;
 }
 
-int Mesh::getVertexValence(VertexIndex vIdx) const
+void Mesh::setEdgeSharpness(EdgeIndex e, float sharpness)
 {
-    assert(vIdx < vertices_.size());
-    
-    const Vertex& v = vertices_[vIdx];
-    if (v.outgoing == INVALID_INDEX)
-        return 0; // Isolated vertex
-    
-    int valence = 0;
-    HalfEdgeIndex start = v.outgoing;
-    HalfEdgeIndex current = start;
-    
-    do 
-    {
-        valence++;
-        
-        auto twin = halfEdges_[current].twin;
-        if (twin == INVALID_INDEX) 
-        {
-            // boundary going clockwise - counter-clockwise from start
-            current = start;
-            
-            while(true)
-            {
-                auto prev = halfEdges_[current].prev;
-                if(prev == INVALID_INDEX) break;
-                
-                auto prevTwin = halfEdges_[prev].twin;
-                if(prevTwin == INVALID_INDEX)
-                {
-                    // This prev edge is the boundary on the other side
-                    // We need to count it
-                    valence++;
-                    break;
-                }
-                // Count this edge and continue
-                valence++;
-                current = prevTwin;
-            }
-            break; 
-        }
-    
-        current = halfEdges_[twin].next;
-        
-        if (valence > 1000)
-            return -1; // Safety check
-        
-    } 
-    while (current != start);
-    
-    return valence;
+    if (e >= edges.size()) return;
+    edges[e].sharpness = sharpness;
+    edges[e].tag       = (sharpness > 0.0f) ? EdgeTag::SEMI : EdgeTag::SMOOTH;
 }
 
-bool Mesh::isBoundaryVertex(VertexIndex vIdx) const
+void Mesh::setEdgeCrease(EdgeIndex e, bool crease)
 {
-    assert(vIdx < vertices_.size());
-    
-    const Vertex& v = vertices_[vIdx];
-    if (v.outgoing == INVALID_INDEX)
-        return true; // Isolated vertex is considered boundary
-    
-    // Walk around vertex and check if any half-edge has no twin
-    HalfEdgeIndex start = v.outgoing;
-    HalfEdgeIndex current = start;
-    
-    do 
-    {
-        if (halfEdges_[current].twin == INVALID_INDEX)
-            return true;
-        
-        HalfEdgeIndex twin = halfEdges_[current].twin;
-        if (twin == INVALID_INDEX)
-            return true;
-        
-        current = halfEdges_[twin].next;
-        
-        // Safety check
-        if (current == INVALID_INDEX)
-            return true;
-        
-    } 
-    while (current != start);
-    
-    return false;
+    if (e >= edges.size()) return;
+    edges[e].tag = crease ? EdgeTag::CREASE : EdgeTag::SMOOTH;
+    if (crease)
+        edges[e].sharpness = 1.0f;
+}
+
+void Mesh::clear()
+{
+    vertices.clear();
+    halfEdges.clear();
+    edges.clear();
+    faces.clear();
+    positions.clear();
+    normals.clear();
+    uvs.clear();
+    halfEdgeMap_.clear();
+    cache.clear();
+}
+
+// Queries (delegate to cache) ================================================
+
+uint16_t Mesh::getValence(VertexIndex v) const
+{
+    if (!cache.isValid())
+        const_cast<Mesh*>(this)->buildCache();
+    return cache.getValence(v);
+}
+
+bool Mesh::isBoundaryVertex(VertexIndex v) const
+{
+    if (!cache.isValid())
+        const_cast<Mesh*>(this)->buildCache();
+    return cache.isBoundaryVertex(v);
+}
+
+std::span<const VertexIndex> Mesh::getOneRing(VertexIndex v) const
+{
+    if (!cache.isValid())
+        const_cast<Mesh*>(this)->buildCache();
+    return cache.getVertexOneRing(v);
+}
+
+std::array<VertexIndex, 2> Mesh::getEdgeVertices(EdgeIndex e) const
+{
+    if (!cache.isValid())
+        const_cast<Mesh*>(this)->buildCache();
+    return cache.getEdgeVertices(e);
 }
 
 HalfEdgeIndex Mesh::findHalfEdge(VertexIndex v0, VertexIndex v1) const
@@ -258,306 +240,209 @@ HalfEdgeIndex Mesh::findHalfEdge(VertexIndex v0, VertexIndex v1) const
     auto it = halfEdgeMap_.find(key);
     
     if (it != halfEdgeMap_.end())
-        return it->second; // found it
-
-    // Try opposite direction and return its twin
+        return it->second;
+    
+    // Try twin direction and return twin
     uint64_t twinKey = makeDirectedEdgeKey(v1, v0);
     it = halfEdgeMap_.find(twinKey);
-
-    if (it != halfEdgeMap_.end()) 
-        return halfEdges_[it->second].twin; // found via twin  
-
+    
+    if (it != halfEdgeMap_.end())
+        return halfEdges[it->second].twin;
+    
     return INVALID_INDEX;
 }
 
-EdgeIndex Mesh::findEdge(VertexIndex v0, VertexIndex v1) const
+VertexIndex Mesh::getFromVertex(HalfEdgeIndex he) const
 {
-    // Try to find half-edge in either direction
-    HalfEdgeIndex he = findHalfEdge(v0, v1);
-    if (he == INVALID_INDEX)
-        he = findHalfEdge(v1, v0);
+    if (he >= halfEdges.size()) return INVALID_INDEX;
     
-    if (he == INVALID_INDEX)
-        return INVALID_INDEX;
-    
-    return halfEdges_[he].edge;
+    HalfEdgeIndex prev = halfEdges[he].prev;
+    if (isValidIndex(prev, halfEdges)) 
+        return halfEdges[prev].to;
+    return INVALID_INDEX;
 }
 
-// --- Validation ---
+// Topology Cache =============================================================
+
+void Mesh::buildCache()
+{
+    cache.build(*this);
+}
+
+// Utilities ==================================================================
+void Mesh::computeNormals()
+{
+    // Reset normals
+    std::fill(normals.begin(), normals.end(), glm::vec3(0.0f));
+    
+    // Accumulate face normals (area-weighted)
+    for (FaceIndex f = 0; f < faces.size(); ++f) 
+    {
+        const Face& face = faces[f];
+        
+        if (face.valence < 3) continue;
+        
+        HalfEdgeIndex he = face.edge;
+        if (he == INVALID_INDEX || he >= halfEdges.size()) continue;
+        
+        // Get first 3 vertices to compute normal
+        VertexIndex v0 = getFromVertex(he);
+        he = halfEdges[he].next;
+        if (he == INVALID_INDEX || he >= halfEdges.size()) continue;
+        
+        VertexIndex v1 = getFromVertex(he);
+        he = halfEdges[he].next;
+        if (he == INVALID_INDEX || he >= halfEdges.size()) continue;
+        
+        VertexIndex v2 = getFromVertex(he);
+        
+        if (v0 >= positions.size() || v1 >= positions.size() || v2 >= positions.size()) continue;
+        
+        glm::vec3 p0 = positions[v0];
+        glm::vec3 p1 = positions[v1];
+        glm::vec3 p2 = positions[v2];
+        
+        glm::vec3 normal = glm::cross(p1 - p0, p2 - p0);
+        
+        // Accumulate to all face vertices
+        he = face.edge;
+        size_t count = 0;
+        do 
+        {
+            VertexIndex v = getFromVertex(he);
+            if (v < normals.size())
+                normals[v] += normal;
+            he = halfEdges[he].next;
+            count++;
+        }
+        while (he != face.edge && he != INVALID_INDEX && count < face.valence + 10);
+    }
+    
+    // Normalize
+    for (glm::vec3& n : normals) 
+    {
+        float len = glm::length(n);
+        if (len > 1e-6f)
+            n /= len;
+        else
+            n = glm::vec3(0.0f, 1.0f, 0.0f);
+
+    }
+}
 
 bool Mesh::validate() const
 {
-    SUBDIV_PROFILE_FUNCTION();
-    
     bool valid = true;
     
-    auto addValidationError = [&](const std::string& code, const std::string& message, 
-                                  const std::string& context = "") {
-        valid = false;
-        SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR, code, message, context);
-    };
-    
-    // Check all half-edges
-    for (size_t i = 0; i < halfEdges_.size(); ++i) {
-        const HalfEdge& he = halfEdges_[i];
-        
-        if (he.to >= vertices_.size()) 
+    // Check vertex outgoing
+    for (size_t v = 0; v < vertices.size(); ++v) {
+        HalfEdgeIndex out = vertices[v].outgoing;
+        if (out != INVALID_INDEX && out >= halfEdges.size()) 
         {
-            addValidationError("INVALID_HALFEDGE_TO", "Half-edge 'to' vertex out of bounds", "halfedge " + std::to_string(i));
-            continue;
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_VERTEX_OUTGOING", "Vertex outgoing half-edge out of bounds", "Vertex " + std::to_string(v));
+            valid = false;
+        }
+    }
+    
+    // Check half-edge connectivity
+    for (size_t h = 0; h < halfEdges.size(); ++h) {
+        const HalfEdge& he = halfEdges[h];
+        
+        // Check next/prev
+        if (he.next != INVALID_INDEX) {
+            if (he.next >= halfEdges.size()) 
+            {
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_HALFEDGE_NEXT", "Half-edge next out of bounds", "HalfEdge " + std::to_string(h));
+                valid = false;
+            } 
+            else if (halfEdges[he.next].prev != h) 
+            {
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"HALFEDGE_NEXT_PREV_MISMATCH", "next->prev doesn't point back", "HalfEdge " + std::to_string(h));
+                valid = false;
+            }
         }
         
+        // Check prev/next
+        if (he.prev != INVALID_INDEX) {
+            if (he.prev >= halfEdges.size()) 
+            {
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_HALFEDGE_PREV", "Half-edge prev out of bounds", "HalfEdge " + std::to_string(h));
+                valid = false;
+            } 
+            else if (halfEdges[he.prev].next != h) 
+            {
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"HALFEDGE_PREV_NEXT_MISMATCH", "prev->next doesn't point back", "HalfEdge " + std::to_string(h));
+                valid = false;
+            }
+        }
+        
+        // Check twin
         if (he.twin != INVALID_INDEX) 
         {
-            if (he.twin >= halfEdges_.size()) 
-                addValidationError("INVALID_HALFEDGE_TWIN", "Half-edge twin out of bounds", "halfedge " + std::to_string(i));
-            else if (halfEdges_[he.twin].twin != i)
-                addValidationError("BROKEN_TWIN_LINK", "Twin half-edge doesn't point back", "halfedge " + std::to_string(i));
-            else if (he.edge != INVALID_INDEX && halfEdges_[he.twin].edge != he.edge)
-                addValidationError("TWIN_EDGE_MISMATCH", "Twin half-edges have different edges", "halfedge " + std::to_string(i));
-            
-            // Validate twin half-edge directions
-            const HalfEdge& twin = halfEdges_[he.twin];
-
-            // Get the 'from' vertex of current half-edge
-            VertexIndex heFrom = getFromVertex(static_cast<HalfEdgeIndex>(i));
-            if (heFrom != INVALID_INDEX) 
+            if (he.twin >= halfEdges.size()) 
             {
-                // Current: heFrom -> he.to
-                // Twin:    twin_from -> twin.to
-                // For opposite directions: twin.to should equal heFrom and he.to should equal twin_from
-                if (twin.to != heFrom)
-                    addValidationError("TWIN_WRONG_DIRECTION", "Twin half-edges don't point in opposite directions",
-                                     "halfedge " + std::to_string(i) + " points to " + std::to_string(he.to) +
-                                     ", twin points to " + std::to_string(twin.to) + " (should point to " + std::to_string(heFrom) + ")");
-                
-                VertexIndex twinFrom = getFromVertex(he.twin);
-                if (twinFrom != INVALID_INDEX && twinFrom != he.to) 
-                    addValidationError("TWIN_WRONG_DIRECTION", "Twin half-edge doesn't originate from current half-edge's destination", "halfedge " + std::to_string(i));
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_HALFEDGE_TWIN", "Half-edge twin out of bounds", "HalfEdge " + std::to_string(h));
+                valid = false;
+            } 
+            else if (halfEdges[he.twin].twin != h) 
+            {
+                SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"HALFEDGE_TWIN_MISMATCH", "twin->twin doesn't point back", "HalfEdge " + std::to_string(h));
+                valid = false;
             }
         }
         
-        if (he.next != INVALID_INDEX && he.next >= halfEdges_.size()) 
-            addValidationError("INVALID_HALFEDGE_NEXT", "Half-edge next out of bounds", "halfedge " + std::to_string(i));
-        
-        if (he.prev != INVALID_INDEX && he.prev >= halfEdges_.size()) 
-            addValidationError("INVALID_HALFEDGE_PREV", "Half-edge prev out of bounds", "halfedge " + std::to_string(i));
-        
-        if (he.edge != INVALID_INDEX && he.edge >= edges_.size())
-            addValidationError("INVALID_HALFEDGE_EDGE", "Half-edge edge out of bounds", "halfedge " + std::to_string(i));
-        
-        if (he.face != INVALID_INDEX && he.face >= faces_.size()) {
-            addValidationError("INVALID_HALFEDGE_FACE", "Half-edge face out of bounds", "halfedge " + std::to_string(i));
+        // Check edge
+        if (he.edge != INVALID_INDEX && he.edge >= edges.size()) {
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR, "INVALID_HALFEDGE_EDGE", "Half-edge edge out of bounds", "HalfEdge " + std::to_string(h));
+            valid = false;
         }
         
-        if (he.face != INVALID_INDEX) {
-            if (he.next == INVALID_INDEX || he.prev == INVALID_INDEX)
-                addValidationError("INCOMPLETE_FACE_LOOP", "Half-edge with face missing next/prev", "halfedge " + std::to_string(i));
+        // Check face
+        if (he.face != INVALID_INDEX && he.face >= faces.size()) {
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_HALFEDGE_FACE", "Half-edge face out of bounds", "HalfEdge " + std::to_string(h));
+            valid = false;
         }
         
-        if (he.next != INVALID_INDEX && he.next < halfEdges_.size()) {
-            if (halfEdges_[he.next].prev != i)
-                addValidationError("BROKEN_NEXT_LINK", "next->prev doesn't point back", "halfedge " + std::to_string(i));
-        }
-        
-        if (he.prev != INVALID_INDEX && he.prev < halfEdges_.size()) {
-            if (halfEdges_[he.prev].next != i)
-                addValidationError("BROKEN_PREV_LINK", "prev->next doesn't point back", "halfedge " + std::to_string(i));
+        // Check to vertex
+        if (he.to != INVALID_INDEX && he.to >= vertices.size()) 
+        {
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR, "INVALID_HALFEDGE_TO","Half-edge destination vertex out of bounds", "HalfEdge " + std::to_string(h));
+            valid = false;
         }
     }
     
-    // Check all faces
-    for (size_t i = 0; i < faces_.size(); ++i) 
+    // Check face edges reference valid half-edges
+    for (size_t f = 0; f < faces.size(); ++f) 
     {
-        const Face& f = faces_[i];
-        
-        if (f.edge >= halfEdges_.size()) 
-        {
-            addValidationError("INVALID_FACE_EDGE", "Face edge out of bounds", "face " + std::to_string(i));
-            continue;
+        const Face& face = faces[f];
+        if (face.edge != INVALID_INDEX && face.edge >= halfEdges.size()) {
+            SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_FACE_EDGE", "Face edge half-edge out of bounds", "Face " + std::to_string(f));
+            valid = false;
         }
-        
-        HalfEdgeIndex start = f.edge;
-        HalfEdgeIndex current = start;
-        uint32_t count = 0;
-        
-        do 
-        {
-            if (current >= halfEdges_.size()) 
-            {
-                addValidationError("FACE_LOOP_INVALID_INDEX", "Face loop contains invalid index", "face " + std::to_string(i));
-                break;
-            }
-            
-            if (halfEdges_[current].face != i) 
-                addValidationError("FACE_LOOP_WRONG_FACE", "Face loop half-edge points to wrong face", "face " + std::to_string(i));
-            
-            current = halfEdges_[current].next;
-            count++;
-            
-            if (count > f.valence + 1) 
-            {
-                addValidationError("FACE_LOOP_TOO_LONG", "Face loop is too long", "face " + std::to_string(i));
-                break;
-            }
-            
-        } 
-        while (current != start && current != INVALID_INDEX);
-        
-        if (count != f.valence)
-            addValidationError("FACE_VALENCE_MISMATCH", 
-                             "Face valence doesn't match loop length",
-                             "face " + std::to_string(i) + 
-                             " (expected " + std::to_string(f.valence) + 
-                             ", got " + std::to_string(count) + ")");
     }
-    
-    // Check manifoldness
-    for (size_t i = 0; i < edges_.size(); ++i) 
-    {
-        int heCount = 0;
-        for (const HalfEdge& he : halfEdges_) 
-        {
-            if (he.edge == i)
-                heCount++;
-        }
-        
-        if (heCount > 2) 
-            addValidationError("NON_MANIFOLD_EDGE", "Edge has more than 2 half-edges", "edge " + std::to_string(i));
-        
-        if (heCount == 0) 
-            addValidationError("ORPHANED_EDGE", "Edge has no half-edges", "edge " + std::to_string(i));
-        
-    }
-    
-    // Check attribute array sizes
-    if (vertexAttributes_.size() != vertices_.size()) 
-        addValidationError("VERTEX_ATTRIB_SIZE_MISMATCH", 
-                         "Vertex attributes size doesn't match vertices",
-                         "vertices: " + std::to_string(vertices_.size()) + 
-                         ", attribs: " + std::to_string(vertexAttributes_.size()));
-    
-    if (faceAttributes_.size() != faces_.size()) 
-        addValidationError("FACE_ATTRIB_SIZE_MISMATCH", 
-                         "Face attributes size doesn't match faces",
-                         "faces: " + std::to_string(faces_.size()) + 
-                         ", attribs: " + std::to_string(faceAttributes_.size()));
     
     return valid;
 }
 
-// --- Editing support ---
-
-void Mesh::clear()
+size_t Mesh::getMemoryUsage() const
 {
-    vertices_.clear();
-    halfEdges_.clear();
-    edges_.clear();
-    faces_.clear();
-    vertexAttributes_.clear();
-    faceAttributes_.clear();
-    halfEdgeMap_.clear();
-    faceGroups_.clear();
-}
-
-void Mesh::rebuildEdgeMap()
-{
-    halfEdgeMap_.clear();
+    size_t total = 0;
     
-    for (size_t i = 0; i < halfEdges_.size(); ++i) 
-    {
-        const HalfEdge& he = halfEdges_[i];
-        
-        if (he.prev == INVALID_INDEX) continue;
-        
-        VertexIndex v0 = halfEdges_[he.prev].to;
-        VertexIndex v1 = he.to;
-        
-        uint64_t key = makeDirectedEdgeKey(v0, v1);
-        halfEdgeMap_[key] = static_cast<HalfEdgeIndex>(i);
-    }
-}
-
-// --- Attribute management ---
-
-void Mesh::computeFaceNormals()
-{
-    SUBDIV_PROFILE_FUNCTION();
-
-    for (size_t i = 0; i < faces_.size(); ++i) 
-    {
-        const Face& face = faces_[i];
-        
-        // Get three vertices of the face to compute normal
-        HalfEdgeIndex he0 = face.edge;
-        HalfEdgeIndex he1 = halfEdges_[he0].next;
-        
-        VertexIndex v0 = getFromVertex(he0);
-        VertexIndex v1 = halfEdges_[he0].to;
-        VertexIndex v2 = halfEdges_[he1].to;
-        
-        if (v0 == INVALID_INDEX) continue;
-        
-        const glm::vec3& p0 = vertices_[v0].position;
-        const glm::vec3& p1 = vertices_[v1].position;
-        const glm::vec3& p2 = vertices_[v2].position;
-        
-        glm::vec3 edge1 = p1 - p0;
-        glm::vec3 edge2 = p2 - p0;
-        glm::vec3 normal = glm::cross(edge1, edge2);
-        
-        float length = glm::length(normal);
-        if (length > 1e-6f) {
-            normal /= length;
-        } else {
-            normal = glm::vec3(0.0f, 1.0f, 0.0f); // Degenerate face
-        }
-        
-        faceAttributes_[i].normal = normal;
-    }
-}
-
-void Mesh::computeVertexNormals()
-{
-    SUBDIV_PROFILE_FUNCTION();
-
-    // First compute face normals
-    computeFaceNormals();
+    total += vertices.size() * sizeof(Vertex);
+    total += halfEdges.size() * sizeof(HalfEdge);
+    total += edges.size() * sizeof(Edge);
+    total += faces.size() * sizeof(Face);
     
-    // Reset vertex normals
-    for (auto& attrib : vertexAttributes_)
-        attrib.normal = glm::vec3(0.0f);
+    total += positions.size() * sizeof(glm::vec3);
+    total += normals.size() * sizeof(glm::vec3);
+    total += uvs.size() * sizeof(glm::vec2);
     
-    // Accumulate face normals to vertices (area-weighted)
-    for (size_t i = 0; i < faces_.size(); ++i) 
-    {
-        const Face& face = faces_[i];
-        const glm::vec3& faceNormal = faceAttributes_[i].normal;
-        
-        // Walk around face and add normal to each vertex
-        HalfEdgeIndex current = face.edge;
-        HalfEdgeIndex start = current;
-        
-        do 
-        {
-            VertexIndex vIdx = getFromVertex(current);
-            if (vIdx != INVALID_INDEX)
-                vertexAttributes_[vIdx].normal += faceNormal;
-            
-            current = halfEdges_[current].next;
-        } 
-        while (current != start && current != INVALID_INDEX);
-    }
+    total += cache.memoryUsage();
     
-    // Normalize vertex normals
-    for (auto& attrib : vertexAttributes_) 
-    {
-        float length = glm::length(attrib.normal);
-        if (length > 1e-6f)
-            attrib.normal /= length;
-        else
-            attrib.normal = glm::vec3(0.0f, 1.0f, 0.0f);
-    }
+    // Half-edge map overhead
+    total += halfEdgeMap_.size() * (sizeof(uint64_t) + sizeof(HalfEdgeIndex));
+    
+    return total;
 }
 
 }

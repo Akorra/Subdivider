@@ -7,7 +7,12 @@
 
 namespace Subdiv::Control
 {
-// Indices for cache-friendly storage
+
+// #define IS_VALID_INDEX(idx, maxSize) ((idx) != INVALID_INDEX && (idx) < (maxSize))
+template <typename IndexT, typename SizeT>
+constexpr bool isValidIndex(IndexT idx, SizeT maxSize) noexcept { return idx != INVALID_INDEX && idx < maxSize; }
+
+// Type Aliases
 using VertexIndex   = uint32_t;
 using HalfEdgeIndex = uint32_t;
 using FaceIndex     = uint32_t;
@@ -16,54 +21,47 @@ using EdgeIndex     = uint32_t;
 static constexpr uint32_t INVALID_INDEX = 0xFFFFFFFF;
 
 /**
- * @brief Edge type for subdivision surfaces.
+ * @brief Edge sharpness classification for subdivision.
  */
 enum class EdgeTag : uint8_t 
 {
-    EDGE_SMOOTH = 0,    // Normal smooth edge.
-    EDGE_HARD   = 1,    // Fully sharp edge.    
-    EDGE_SEMI   = 2,    // Semi-sharp edge, controlled by sharpness var
+    SMOOTH = 0,  ///< Smooth edge (default)
+    CREASE = 1,  ///< Hard crease (infinitely sharp)
+    SEMI   = 2,  ///< Semi-sharp (sharpness decreases each subdivision)
 };
-
 
 /**
  * @brief Vertex structure - GPU friendly layout.
  * 
- * Memory layout: 24 bytes
+ * Memory layout:   16 bytes
  * - vec3 position: 12 bytes
  * - HalfEdgeIndex: 4 bytes
- * - float sharpness: 4 bytes
- * - bool isCorner: 1 byte
- * - padding: 3 bytes
  */
 struct Vertex 
 {
-    glm::vec3     position{0.0f};             // Vertex position in 3D space
-    HalfEdgeIndex outgoing   = INVALID_INDEX; // One outgoing half-edge (arbitrary)
-    float         sharpness  = 0.0f;          // Corner sharpness (0 = smooth, higher = sharper)
-    bool          corner     = false;         // Corner vertex (don't smooth)
-    uint8_t       padding[3] = {0};           // Explicit padding for alignment
-    
-    bool isBoundary() const { return outgoing == INVALID_INDEX; }
+    HalfEdgeIndex outgoing   = INVALID_INDEX; // One outgoing half-edge
+    float         sharpness  = 0.0f;          // Corner sharpness
+    uint8_t       isCorner   = 0;             // Dart vertex flag
+    uint8_t       padding[3] = {0};           // Explicit padding
 };
+static_assert(sizeof(Vertex) == 12, "Vertex should be 12 bytes");
 
 /**
  * @brief Half-edge structure.
  * 
- * Memory layout: 20 bytes (5 x uint32_t)
+ * Memory layout: 24 bytes (6 x uint32_t)
  * Tightly packed for cache efficiency.
  */
 struct HalfEdge 
 {
     VertexIndex   to   = INVALID_INDEX; // Destination vertex
-    HalfEdgeIndex next = INVALID_INDEX; // Next half-edge in face loop
-    HalfEdgeIndex prev = INVALID_INDEX; // Previous half-edge in face loop
-    HalfEdgeIndex twin = INVALID_INDEX; // Opposite half-edge (INVALID if boundary)
-    FaceIndex     face = INVALID_INDEX;
-    EdgeIndex     edge = INVALID_INDEX; // Parent edge (for shared attributes)
-    
-    bool isBoundary() const { return twin == INVALID_INDEX; }
+    HalfEdgeIndex next = INVALID_INDEX; // Next in face loop
+    HalfEdgeIndex prev = INVALID_INDEX; // Previous in face loop
+    HalfEdgeIndex twin = INVALID_INDEX; // Opposite half-edge
+    EdgeIndex     edge = INVALID_INDEX; // Parent edge
+    FaceIndex     face = INVALID_INDEX; // Adjacent face
 };
+static_assert(sizeof(HalfEdge) == 24, "HalfEdge should be 24 bytes");
 
 /**
  * @brief Edge attributes - shared between twin half-edges.
@@ -71,12 +69,13 @@ struct HalfEdge
  * 
  * Memory layout: 8 bytes
  */
-struct Edge
+struct Edge 
 {
-    EdgeTag tag        = EdgeTag::EDGE_SMOOTH;
-    float   sharpness  = 0.0f;                  // Semi-sharp edge sharpness (0 = smooth, higher = sharper)
-    uint8_t padding[3] = {0};                   // Explicit padding
+    EdgeTag tag = EdgeTag::SMOOTH;
+    uint8_t padding[3] = {0};
+    float sharpness = 0.0f;
 };
+static_assert(sizeof(Edge) == 8, "Edge should be 8 bytes");
 
 /**
  * @brief Face structure.
@@ -85,11 +84,10 @@ struct Edge
  */
 struct Face 
 {
-    HalfEdgeIndex edge    = INVALID_INDEX; // One half-edge on this face
-    uint32_t      valence = 0;             // Number of edges (cached)
-    
-    bool isQuad() const { return valence == 4; }
+    HalfEdgeIndex edge    = INVALID_INDEX; // One boundary half-edge
+    uint32_t      valence = 0;             // Number of vertices
 };
+static_assert(sizeof(Face) == 8, "Face should be 8 bytes");
 
 /**
  * @brief Face group for materials/selections.
@@ -98,22 +96,6 @@ struct FaceGroup
 {
     std::string            name;
     std::vector<FaceIndex> faces;
-};
-
-/**
- * @brief Per-vertex attributes for rendering.
- * Stored separately from topology for flexibility and GPU alignment.
- * These can be subdivided using various rules (linear, smooth, etc.)
- * 
- * Memory layout: 32 bytes (cache-line friendly)
- */
-struct VertexAttributes
-{
-    glm::vec3 normal{0.0f, 1.0f, 0.0f};  // 12 bytes - Vertex normal
-    glm::vec2 uv{0.0f};                  // 8 bytes  - Texture coordinates
-    glm::vec4 color{1.0f};               // 16 bytes - Vertex color (RGBA)
-    
-    // Could add tangent/bitangent here if needed
 };
 
 /**
@@ -133,27 +115,5 @@ using Vertices      = std::vector<Vertex>;
 using HalfEdges     = std::vector<HalfEdge>;
 using Edges         = std::vector<Edge>;
 using Faces         = std::vector<Face>;
-using VertexAttribs = std::vector<VertexAttributes>;
-using FaceAttribs   = std::vector<FaceAttributes>;
-
-/**
- * @brief Create a directed key for a half-edge (v0 -> v1).
- * This maintains direction, so v0->v1 and v1->v0 have different keys.
- */
-inline uint64_t makeDirectedEdgeKey(VertexIndex v0, VertexIndex v1) 
-{
-    return (static_cast<uint64_t>(v0) << 32) | static_cast<uint64_t>(v1);
-}
-
-
-/**
- * @brief Create an undirected key for an edge (unordered pair of vertices).
- * Used for finding edges regardless of direction.
- */
-inline uint64_t makeUndirectedEdgeKey(VertexIndex v0, VertexIndex v1) 
-{
-    if (v0 > v1) std::swap(v0, v1);
-    return (static_cast<uint64_t>(v0) << 32) | static_cast<uint64_t>(v1);
-}
 
 } // namespace Subdiv::Control
