@@ -284,16 +284,24 @@ void App::Run() {
 }
 
 void App::ProcessInput() {
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
+    // ESC to exit (immediate, not toggle)
+    if (IsKeyPressed(GLFW_KEY_ESCAPE) == GLFW_PRESS)
+        glfwSetWindowShouldClose(window, true);
+
+    if (IsKeyPressed(GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
     // Toggle wireframe
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+    if (IsKeyPressed(GLFW_KEY_W) == GLFW_PRESS)
         showWireframe = !showWireframe;
     
     // Toggle solid
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+    if (IsKeyPressed(GLFW_KEY_S) == GLFW_PRESS)
         showSolid = !showSolid;
+
+    // Optional: continuous rotation control
+    if (IsKeyPressed(GLFW_KEY_SPACE))
+        rotationAngle = 0.0f; // Reset rotation
 }
 
 void App::Update() {
@@ -314,7 +322,7 @@ void App::Render() {
     glm::mat4 mvp = projection * view * model;
 
     glBindVertexArray(vao);
-    
+
     // Render solid mesh
     if (showSolid)
     {
@@ -358,4 +366,44 @@ void App::Render() {
     }
 
     glBindVertexArray(0);
+}
+
+void App::UpdateKeyStates()
+{
+    // Update previous frame states
+    keyPressedLastFrame = keyPressed;
+    
+    // Update current frame states
+    for (auto& [key, _] : keyPressed) 
+        keyPressed[key] = (glfwGetKey(window, key) == GLFW_PRESS);
+}
+
+bool App::IsKeyPressed(int key)
+{
+    // Ensure key is tracked
+    if (keyPressed.find(key) == keyPressed.end()) 
+    {
+        keyPressed[key] = false;
+        keyPressedLastFrame[key] = false;
+    }
+    
+    return glfwGetKey(window, key) == GLFW_PRESS;
+}
+
+bool App::IsKeyJustPressed(int key)
+{
+    // Ensure key is tracked
+    if (keyPressed.find(key) == keyPressed.end()) 
+    {
+        keyPressed[key] = false;
+        keyPressedLastFrame[key] = false;
+    }
+    
+    bool currentlyPressed = glfwGetKey(window, key) == GLFW_PRESS;
+    bool wasPressed = keyPressedLastFrame[key];
+    
+    keyPressed[key] = currentlyPressed;
+    
+    // Only true on the first frame of press
+    return currentlyPressed && !wasPressed;
 }

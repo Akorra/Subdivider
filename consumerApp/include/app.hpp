@@ -24,10 +24,19 @@ private:
     bool InitMesh();
     void CleanupGL();
 
+    // Key press helpers
+    bool IsKeyPressed(int key);
+    bool IsKeyJustPressed(int key);
+    void UpdateKeyStates();
+
 private:
     int width, height;
     const char* title;
     GLFWwindow* window;
+
+    // Key state tracking
+    std::unordered_map<int, bool> keyPressed;
+    std::unordered_map<int, bool> keyPressedLastFrame;
 
     // Mesh data
     Subdiv::Control::Mesh* mesh;
