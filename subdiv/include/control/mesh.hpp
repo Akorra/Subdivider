@@ -66,6 +66,9 @@ public:
 
     // Direct Data Access (for GPU upload, subdivision, etc.) =================
 
+    bool  setPositions(const std::vector<glm::vec3>& vertices);
+    const std::vector<glm::vec3>& getPositions() const { return positions; }
+    
     const void* getPositionsData()  const { return positions.data(); }
     size_t      getPositionsBytes() const { return positions.size() * sizeof(glm::vec3); }
     
