@@ -1,6 +1,8 @@
 add_executable(consumerApp 
     main.cpp 
     src/app.cpp
+    src/render_mesh.cpp
+    src/animator.cpp
 )
 
 # Library headers
@@ -45,4 +47,4 @@ glad_add_library(
 )
 
 # Link the created glad loader with our executable
-target_link_libraries(consumerApp PRIVATE glad_gl_core_46)
+target_link_libraries(consumerApp PRIVATE glad_gl_core_46) 
