@@ -239,7 +239,9 @@ bool App::InitMesh()
     glBufferData(GL_ARRAY_BUFFER,
                  mesh->getPositionsBytes(),
                  mesh->getPositionsData(),
-                 GL_STATIC_DRAW);
+                 GL_DYNAMIC_DRAW);
+
+    animator.init(mesh);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
     glEnableVertexAttribArray(0);
@@ -254,6 +256,11 @@ bool App::InitMesh()
 
     // Upload wireframe indices (separate buffer)
     glGenBuffers(1, &wireframeEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframeEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+             renderMesh->getWireframeIndicesBytes(),
+             renderMesh->getWireframeIndicesData(),
+             GL_STATIC_DRAW);
     
     glBindVertexArray(0);
 
@@ -347,13 +354,19 @@ void App::ProcessInput() {
 }
 
 void App::Update() {
-    // Future: update mesh or UI here
-
-    // Rotate the cube
+    // update mesh
+    animator.setActive(animate);
     if (animate)
     {
-        rotationAngle += 0.01f;
-        model = glm::rotate(glm::mat4(1.0f), rotationAngle, glm::vec3(0.5f, 1.0f, 0.0f));
+        time += 0.016f; // ~60fps fixed step;
+        animator.update(time);
+
+        // Stream updated positions to GPU - Usually would do it on REnder
+        glBindBuffer(GL_ARRAY_BUFFER, vbo);
+        glBufferSubData(GL_ARRAY_BUFFER, 0,
+                        mesh->getPositionsBytes(),
+                        mesh->getPositionsData());
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
     }
 }
 
@@ -398,12 +411,7 @@ void App::Render() {
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, glm::value_ptr(mvp));
         
         // Draw lines
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframeEBO);
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                     renderMesh->getWireframeIndicesBytes(),
-                     renderMesh->getWireframeIndicesData(),
-                     GL_STATIC_DRAW);
-        
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, wireframeEBO);        
         glDrawElements(GL_LINES, 
                        renderMesh->numWireframeLines() * 2, 
                        GL_UNSIGNED_INT, 
@@ -436,11 +444,6 @@ void App::OnKeyPress(int key, int action)
         case GLFW_KEY_SPACE:
             animate = !animate;
             std::cout << "Auto-rotate: " << (animate ? "ON" : "OFF") << "\n";
-            break;
-            
-        case GLFW_KEY_R:
-            rotationAngle = 0.0f;
-            std::cout << "Rotation reset\n";
             break;
             
         // Camera controls

@@ -3,8 +3,10 @@
 #include "glm/glm.hpp"
 #include <unordered_map>
 
+#include "animator.hpp"
+
 struct GLFWwindow;
-class RenderMesh;
+class  RenderMesh;
 
 namespace Subdiv::Control { class Mesh; }
 
@@ -77,10 +79,12 @@ private:
     glm::mat4 view;
     glm::mat4 model;
 
-    float rotationAngle = 0.0f;
     bool  showWireframe = true;
     bool  showSolid     = true;
-    bool  animate       = true;
+
+    VertexAnimator  animator;
+    float           time    = 0.0f;
+    bool            animate = false;
 
     // Mouse state
     bool   isTumbling = false;   // LMB held
