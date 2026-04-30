@@ -14,6 +14,7 @@ add_library(subdiv STATIC
     src/control/mesh_cache.cpp
     src/control/mesh.cpp
     src/diagnostics/context.cpp
+    src/plan/subdivisionplan.cpp
 )
 
 # Library headers
