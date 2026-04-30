@@ -2,6 +2,8 @@
 
 #include "mesh_cache.hpp"
 
+#include <unordered_map>
+
 namespace Subdiv::Control 
 {
 

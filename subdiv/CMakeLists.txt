@@ -1,3 +1,14 @@
+include(FetchContent)
+
+FetchContent_Declare(
+    glm
+    GIT_REPOSITORY https://github.com/g-truc/glm.git
+    GIT_TAG 1.0.1  # Use a specific release tag
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(glm)
+
+
 add_library(subdiv STATIC 
     src/subdiv.cpp
     src/control/mesh_cache.cpp
@@ -8,14 +19,16 @@ add_library(subdiv STATIC
 # Library headers
 target_include_directories(subdiv PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include  # subdiv headers
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/glm  # GLM headers
 )
+
+# Link GLM as a dependency
+target_link_libraries(subdiv PUBLIC glm::glm)
 
 # Force latest C++ standard per target
 target_compile_features(subdiv PUBLIC cxx_std_23)
 
 # ---------------------
-# Diagnostic Configuration
+# Diagnostic Configuration 
 # ---------------------
 
 # Pass build configuration as compile definitions
