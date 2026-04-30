@@ -460,4 +460,28 @@ size_t Mesh::getMemoryUsage() const
     return total;
 }
 
+bool Mesh::setPositions(const std::vector<glm::vec3>& newPositions)
+{
+    if (newPositions.size() != positions.size())
+    {
+        SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_VERTEX_ARRAY", "topology mismatch", 
+            "size mismatch — expected " + std::to_string(positions.size()) + " got " + std::to_string(newPositions.size()));
+        return false;
+    }
+
+    for (size_t i = 0; i < newPositions.size(); ++i)
+    {
+        const glm::vec3& p = newPositions[i];
+        if (!std::isfinite(p.x) || !std::isfinite(p.y) || !std::isfinite(p.z))
+        {
+             SUBDIV_ADD_ERROR(Subdiv::Diagnostics::ErrorSeverity::ERROR,"INVALID_VERTEX_ARRAY", "value error", 
+                "Non-finite value at vertex " + std::to_string(i) + " - (" + std::to_string(p.x) + "," + std::to_string(p.y) + "," + std::to_string(p.z) + ")");
+            return false;
+        }
+    }
+
+    positions = newPositions;
+    return true;
+}
+
 }
