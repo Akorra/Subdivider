@@ -67,6 +67,7 @@ bool App::Init()
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
 
     window = glfwCreateWindow(width, height, title, nullptr, nullptr);
     if (!window) 
@@ -84,6 +85,9 @@ bool App::Init()
     // Register callbacks
     glfwSetKeyCallback(window, KeyCallback);
     glfwSetFramebufferSizeCallback(window, FramebufferSizeCallback);
+    glfwSetMouseButtonCallback(window, MouseButtonCallback);
+    glfwSetCursorPosCallback(window, CursorPosCallback);
+    glfwSetScrollCallback(window, ScrollCallback);
 
     // --- Initialize GLAD ---
     if (!gladLoadGL(glfwGetProcAddress)) 
@@ -95,7 +99,8 @@ bool App::Init()
     std::cout << "OpenGL version: " << glGetString(GL_VERSION) << "\n";
 
     glEnable(GL_DEPTH_TEST);
-    glLineWidth(2.0f); // Thicker wireframe lines
+    glEnable(GL_MULTISAMPLE); 
+    glLineWidth(1.0f); // Thicker wireframe lines
 
     // Initialize camera matrices
     UpdateProjection();
@@ -480,6 +485,104 @@ void App::OnKeyPress(int key, int action)
             std::cout << "Camera reset\n";
             break;
     }
+}
+
+void App::MouseButtonCallback(GLFWwindow* window, int button, int action, int mods)
+{
+    App* app = static_cast<App*>(glfwGetWindowUserPointer(window));
+    if (app) app->OnMouseButton(button, action, mods);
+}
+
+void App::CursorPosCallback(GLFWwindow* window, double xpos, double ypos)
+{
+    App* app = static_cast<App*>(glfwGetWindowUserPointer(window));
+    if (app) app->OnCursorPos(xpos, ypos);
+}
+
+void App::ScrollCallback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    App* app = static_cast<App*>(glfwGetWindowUserPointer(window));
+    if (app) app->OnScroll(xoffset, yoffset);
+}
+
+void App::OnMouseButton(int button, int action, int mods)
+{
+    const bool pressed = (action == GLFW_PRESS);
+
+    if (button == GLFW_MOUSE_BUTTON_LEFT)
+    {
+        // Alt+LMB → pan, plain LMB → tumble
+        if (mods & GLFW_MOD_ALT)
+            isPanning = pressed;
+        else
+            isTumbling = pressed;
+    }
+    else if (button == GLFW_MOUSE_BUTTON_MIDDLE)
+    {
+        isPanning = pressed;
+    }
+
+    // On any button press, snapshot cursor position to avoid a jump
+    if (pressed)
+        glfwGetCursorPos(window, &lastMouseX, &lastMouseY);
+
+    // Release both if no button is held
+    if (!pressed)
+    {
+        if (button == GLFW_MOUSE_BUTTON_LEFT)  { isTumbling = false; isPanning = false; }
+        if (button == GLFW_MOUSE_BUTTON_MIDDLE) isPanning = false;
+    }
+}
+
+void App::OnCursorPos(double xpos, double ypos)
+{
+    const double dx = xpos - lastMouseX;
+    const double dy = ypos - lastMouseY;
+    lastMouseX = xpos;
+    lastMouseY = ypos;
+
+    if (isTumbling)
+    {
+        // Drag left/right → yaw, drag up/down → pitch
+        cameraYaw   += static_cast<float>(dx) * tumbleSensitivity;
+        cameraPitch  = glm::clamp(
+            cameraPitch - static_cast<float>(dy) * tumbleSensitivity,
+            -89.0f, 89.0f);
+        UpdateCamera();
+    }
+    else if (isPanning)
+    {
+        // Move the camera target in the view-space XY plane
+        float yawRad   = glm::radians(cameraYaw);
+        float pitchRad = glm::radians(cameraPitch);
+
+        // Right vector (perpendicular to camera direction, in XZ plane)
+        glm::vec3 right(
+             cos(yawRad),
+             0.0f,
+            -sin(yawRad));
+
+        // True up vector (accounting for pitch)
+        glm::vec3 forward(
+            cos(pitchRad) * sin(yawRad),
+            sin(pitchRad),
+            cos(pitchRad) * cos(yawRad));
+        glm::vec3 up = glm::normalize(glm::cross(right, forward));
+
+        // Scale pan speed by distance so it feels consistent at any zoom level
+        float scale = cameraDistance * panSensitivity;
+        cameraTarget -= right * static_cast<float>(dx) * scale;
+        cameraTarget += up    * static_cast<float>(dy) * scale;
+        UpdateCamera();
+    }
+}
+
+void App::OnScroll(double /*xoffset*/, double yoffset)
+{
+    cameraDistance = glm::clamp(
+        cameraDistance - static_cast<float>(yoffset) * zoomSensitivity,
+        0.5f, 50.0f);
+    UpdateCamera();
 }
 
 void App::OnWindowResize(int newWidth, int newHeight)

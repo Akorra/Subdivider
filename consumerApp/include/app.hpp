@@ -19,6 +19,9 @@ public:
     // Callbacks
     void OnKeyPress(int key, int action);
     void OnWindowResize(int width, int height);
+    void OnMouseButton(int button, int action, int mods);
+    void OnCursorPos(double xpos, double ypos);
+    void OnScroll(double xoffset, double yoffset);
 
 private:
     void ProcessInput();
@@ -35,6 +38,9 @@ private:
     // Static callback wrappers
     static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
     static void FramebufferSizeCallback(GLFWwindow* window, int width, int height);
+    static void MouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
+    static void CursorPosCallback(GLFWwindow* window, double xpos, double ypos);
+    static void ScrollCallback(GLFWwindow* window, double xoffset, double yoffset);
 
 private:
     int width, height;
@@ -75,4 +81,15 @@ private:
     bool  showWireframe = true;
     bool  showSolid     = true;
     bool  autoRotate    = true;
+
+    // Mouse state
+    bool   isTumbling = false;   // LMB held
+    bool   isPanning  = false;   // MMB held (or Alt+LMB)
+    double lastMouseX = 0.0;
+    double lastMouseY = 0.0;
+    
+    // Sensitivity tuning
+    float tumbleSensitivity = 0.3f;  // degrees per pixel
+    float panSensitivity    = 0.005f; // world units per pixel (scaled by distance)
+    float zoomSensitivity   = 0.3f;  // distance units per scroll tick
 };
