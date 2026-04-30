@@ -80,7 +80,7 @@ private:
     float rotationAngle = 0.0f;
     bool  showWireframe = true;
     bool  showSolid     = true;
-    bool  autoRotate    = true;
+    bool  animate       = true;
 
     // Mouse state
     bool   isTumbling = false;   // LMB held

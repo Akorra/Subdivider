@@ -350,7 +350,7 @@ void App::Update() {
     // Future: update mesh or UI here
 
     // Rotate the cube
-    if (autoRotate)
+    if (animate)
     {
         rotationAngle += 0.01f;
         model = glm::rotate(glm::mat4(1.0f), rotationAngle, glm::vec3(0.5f, 1.0f, 0.0f));
@@ -434,8 +434,8 @@ void App::OnKeyPress(int key, int action)
             break;
             
         case GLFW_KEY_SPACE:
-            autoRotate = !autoRotate;
-            std::cout << "Auto-rotate: " << (autoRotate ? "ON" : "OFF") << "\n";
+            animate = !animate;
+            std::cout << "Auto-rotate: " << (animate ? "ON" : "OFF") << "\n";
             break;
             
         case GLFW_KEY_R:
