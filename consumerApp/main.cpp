@@ -26,8 +26,7 @@ int main()
     std::cout << "----------------------------------------------\n";
     std::cout << "  W      - Toggle wireframe\n";
     std::cout << "  S      - Toggle solid\n";
-    std::cout << "  SPACE  - Toggle auto-rotate\n";
-    std::cout << "  R      - Reset rotation\n";
+    std::cout << "  SPACE  - Toggle Animation\n";
     std::cout << "\n";
     std::cout << "  Arrow Keys - Rotate camera\n";
     std::cout << "  A/D    - Orbit camera horizontally (smooth)\n";
