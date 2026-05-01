@@ -5,6 +5,7 @@
 namespace Subdiv::Plan
 {
 
+// QuadTree Node Types
 enum class NodeType : uint8_t {
     Internal     = 0,  // has 4 children, recurse
     Regular      = 1,  // bicubic B-spline, 16 control points
@@ -13,6 +14,29 @@ enum class NodeType : uint8_t {
     Terminal     = 4,  // collapses n levels of EV subtree
     Extraordinary= 5,  // EV corner: limit pos + 2 tangents only
 };
+
+/**
+ * @brief QuadNode
+ * 
+ * 8-byte node for a flattened quadtree array
+ * Tree structure is encoded via integer indices rather than pointers.
+ * Internal nodes store the index of their first child
+ * children are of node[i] are at node[child_offset + 0 .. 3].
+ * Total Size: 8 bytes -> 2 nodes per cache line pair
+ * (children are allocated in groups of 4 -> 1 cache line holds 2 sibling groups)
+ */
+struct alignas(8) QuadNode {
+    NodeType  type;
+    uint8_t   crease_edge;    // which edge (0-3), only for Crease
+    uint8_t   rotation;       // EV corner rotation, Terminal/Extraordinary
+    uint8_t   depth;          // subdivision depth of this node
+    uint32_t  payload;        // meaning depends on type:
+                              //   Internal:      index of first child (children are payload+0..3)
+                              //   Regular/Boundary/Crease: stencil_offset (16 stencils)
+                              //   Terminal:      stencil_offset (24 * num_levels stencils)
+                              //   Extraordinary: stencil_offset (3 stencils: pos, tan0, tan1)
+};
+static_assert(sizeof(QuadNode) == 8);
 
 /**
  * @brief SubdivisionPlan
@@ -27,7 +51,8 @@ enum class NodeType : uint8_t {
  */
  class SubdivisionPlan 
  {
-
+    // QuadTree nodes with root at nodes_[0]
+    std::vector<QuadNode> nodes_;
  };
 
 } // Subdiv::Plan 
