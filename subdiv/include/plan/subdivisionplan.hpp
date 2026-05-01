@@ -36,6 +36,18 @@ struct alignas(8) QuadNode {
                               //   Terminal:      stencil_offset (24 * num_levels stencils)
                               //   Extraordinary: stencil_offset (3 stencils: pos, tan0, tan1)
 };
+
+/**
+ * @brief CreaseData
+ * 
+ * Data for crease nodes 
+ */ 
+struct CreaseData {
+    float     sharpness;
+    uint8_t   edge;         // which edge (0-3) is creased
+    uint8_t   _pad[3];
+};
+
 static_assert(sizeof(QuadNode) == 8);
 
 /**
@@ -49,10 +61,17 @@ static_assert(sizeof(QuadNode) == 8);
  * - Immutable after construction
  * - Shared across faces with the same 1-ring topology
  */
- class SubdivisionPlan 
- {
-    // QuadTree nodes with root at nodes_[0]
-    std::vector<QuadNode> nodes_;
- };
+struct SubdivisionPlan 
+{
+    std::vector<QuadNode>   nodes;        // QuadTree nodes with root at nodes_[0]
+    std::vector<float>      weights;      // Packed stencil weights: all stencils concatenated. stencil i starts at:  weights.data() + i * ringSize
+    std::vector<uint16_t>   levelCounts;  // Number of stencils per-level (max 6 levels for factor 64)
+    std::vector<CreaseData> creaseData;   // Crease data, indexed by crease node's stencil_offset
+
+    uint16_t ringSize       = 0; // Size of 1-ring neighborhood     
+    uint8_t  maxDepth       = 0; // Maximum subdivision depth stored in this plan
+    uint8_t  terminalLevels = 0; // Number of terminal node levels stored
+    uint32_t stencilCount   = 0; // Total number of stencils
+};
 
 } // Subdiv::Plan 
