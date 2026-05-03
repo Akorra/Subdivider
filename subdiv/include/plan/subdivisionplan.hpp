@@ -36,6 +36,7 @@ struct alignas(8) QuadNode {
                               //   Terminal:      stencil_offset (24 * num_levels stencils)
                               //   Extraordinary: stencil_offset (3 stencils: pos, tan0, tan1)
 };
+static_assert(sizeof(QuadNode) == 8);
 
 /**
  * @brief CreaseData
@@ -48,8 +49,6 @@ struct CreaseData {
     uint8_t   _pad[3];
 };
 
-static_assert(sizeof(QuadNode) == 8);
-
 /**
  * @brief SubdivisionPlan
  *  
@@ -57,7 +56,7 @@ static_assert(sizeof(QuadNode) == 8);
  * 
  * Design:
  * - Flat index-based dense arrays
- * - SOA layout (cache-optimized)
+ * - SoA layout (cache-optimized)
  * - Immutable after construction
  * - Shared across faces with the same 1-ring topology
  */
@@ -69,9 +68,13 @@ struct SubdivisionPlan
     std::vector<CreaseData> creaseData;   // Crease data, indexed by crease node's stencil_offset
 
     uint16_t ringSize       = 0; // Size of 1-ring neighborhood     
+    uint8_t  faceValence    = 4;  // 4 = quad; 3/5/6/... = n-gon
     uint8_t  maxDepth       = 0; // Maximum subdivision depth stored in this plan
     uint8_t  terminalLevels = 0; // Number of terminal node levels stored
+    uint8_t  _pad[3]        = {};
     uint32_t stencilCount   = 0; // Total number of stencils
+
+    bool IsQuad() const { return faceValence == 4; }
 };
 
 } // Subdiv::Plan 
