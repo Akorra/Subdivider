@@ -146,4 +146,25 @@ struct FaceConfigHash
     }
 };
 
+/**
+ * @brief Accessor Helpers 
+ * 
+ * Some helpers provided moslty for readibility
+ */
+
+ //! face confige header data:
+inline int     cfg_valence      (const std::vector<uint8_t>& cfg) { return cfg[0]; }
+inline uint8_t cfg_boundary_rule(const std::vector<uint8_t>& cfg) { return cfg[1]; }
+inline uint8_t cfg_boundary_mask(const std::vector<uint8_t>& cfg) { return cfg[2]; }
+inline uint8_t cfg_rotation     (const std::vector<uint8_t>& cfg) { return cfg[3]; }
+
+//! face config corner data:
+inline const uint8_t* cfg_corner(const std::vector<uint8_t>& cfg, int i) { return &cfg[CONFIG_HEADER_SIZE + i * CONFIG_CORNER_SIZE]; }
+
+//! corner_valence, vertex_sharpness, edge_sharpness, edge_tag for corner i:
+inline uint8_t cfg_corner_valence(const std::vector<uint8_t>& cfg, int i) { return cfg_corner(cfg, i)[0]; }
+inline uint8_t cfg_corner_vsharp (const std::vector<uint8_t>& cfg, int i) { return cfg_corner(cfg, i)[1]; }
+inline uint8_t cfg_edge_sharpness(const std::vector<uint8_t>& cfg, int i) { return cfg_corner(cfg, i)[2]; }
+inline uint8_t cfg_edge_tag      (const std::vector<uint8_t>& cfg, int i) { return cfg_corner(cfg, i)[3]; }
+
 } // Subdiv::Plan 
