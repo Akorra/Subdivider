@@ -52,7 +52,7 @@ public:
 
     HalfEdgeIndex findHalfEdge(VertexIndex v0, VertexIndex v1) const;
     EdgeIndex     findEdge(VertexIndex v0, VertexIndex v1) const;
-    VertexIndex   getFromVertex(HalfEdgeIndex he) const;
+    VertexIndex   getFromVertex(HalfEdgeIndex he) const; //TODO: This is called a lot, maybe store from (each call adds 2 cache misses) 
 
     // Topology Cache =========================================================
 

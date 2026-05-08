@@ -99,6 +99,8 @@ void TopologyCache::build(const Mesh& mesh)
     
     std::vector<uint32_t> vertexFaceCounts(numVerts, 0);
     
+    std::vector<bool> visited(numHalfEdges, false); // Stack-allocated for speed
+
     // Count faces per vertex
     for (FaceIndex f = 0; f < numFaces; ++f) 
     {
@@ -108,8 +110,9 @@ void TopologyCache::build(const Mesh& mesh)
         if (start == INVALID_INDEX) continue;
         
         HalfEdgeIndex current = start;
-        std::vector<bool> visited(numHalfEdges, false); // Stack-allocated for speed
         
+        std::fill(visited.begin(), visited.end(), false);
+
         do 
         {
             if (visited[current]) 
