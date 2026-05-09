@@ -18,7 +18,7 @@ add_library(subdiv STATIC
 
 # Library headers
 target_include_directories(subdiv PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include  # subdiv headers
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/subdiv  # subdiv headers
 )
 
 # Link GLM as a dependency
