@@ -20,7 +20,7 @@ public:
     }
 };
 
-TEST_CASE("Mesh - Basic Construction", "[mesh][construction]")
+TEST_CASE("Control :: Mesh :: Basic Construction", "[control][mesh][construction]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -62,7 +62,7 @@ TEST_CASE("Mesh - Basic Construction", "[mesh][construction]")
     }
 }
 
-TEST_CASE("Mesh - Triangle Face", "[mesh][face][construction]")
+TEST_CASE("Control :: Mesh :: Triangle Face", "[control][mesh][face][construction]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -120,7 +120,7 @@ TEST_CASE("Mesh - Triangle Face", "[mesh][face][construction]")
     }
 }
 
-TEST_CASE("Mesh - Quad Face", "[mesh][face][construction]")
+TEST_CASE("Control :: Mesh :: Quad Face", "[control][mesh][face][construction]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -140,7 +140,7 @@ TEST_CASE("Mesh - Quad Face", "[mesh][face][construction]")
     REQUIRE(mesh.faces[face].valence == 4);
 }
 
-TEST_CASE("Mesh - NGon Face", "[mesh][face][construction]")
+TEST_CASE("Control :: Mesh :: NGon Face", "[control][mesh][face][construction]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -162,7 +162,7 @@ TEST_CASE("Mesh - NGon Face", "[mesh][face][construction]")
     REQUIRE(mesh.faces[face].valence == 5);
 }
 
-TEST_CASE("Mesh - Manifold Mesh", "[mesh][manifold]")
+TEST_CASE("Control :: Mesh :: Manifold Mesh", "[control][mesh][manifold]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -208,7 +208,7 @@ TEST_CASE("Mesh - Manifold Mesh", "[mesh][manifold]")
     }
 }
 
-TEST_CASE("Mesh - Duplicate Directed Edge", "[mesh][direction][error]")
+TEST_CASE("Control :: Mesh :: Duplicate Directed Edge", "[control][mesh][direction][error]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -263,7 +263,7 @@ TEST_CASE("Mesh - Duplicate Directed Edge", "[mesh][direction][error]")
     }
 }
 
-TEST_CASE("Mesh - findHalfEdge", "[mesh][halfedge][query]")
+TEST_CASE("Control :: Mesh :: findHalfEdge", "[control][mesh][halfedge][query]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -345,7 +345,7 @@ TEST_CASE("Mesh - findHalfEdge", "[mesh][halfedge][query]")
     }
 }
 
-TEST_CASE("Mesh - findEdge", "[mesh][edge][query]")
+TEST_CASE("Control :: Mesh :: findEdge", "[control][mesh][edge][query]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -376,7 +376,7 @@ TEST_CASE("Mesh - findEdge", "[mesh][edge][query]")
     }
 }
 
-TEST_CASE("Mesh - Clear", "[mesh]")
+TEST_CASE("Control :: Mesh :: Clear", "[control][mesh]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -398,7 +398,7 @@ TEST_CASE("Mesh - Clear", "[mesh]")
     REQUIRE(!mesh.cache.isValid());
 }
 
-TEST_CASE("Mesh - Complex Geometry", "[mesh][complex]")
+TEST_CASE("Control :: Mesh :: Complex Geometry", "[control][mesh][complex]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -434,7 +434,7 @@ TEST_CASE("Mesh - Complex Geometry", "[mesh][complex]")
     }
 }
 
-TEST_CASE("Mesh - Vertex Position", "[mesh][attributes]")
+TEST_CASE("Control :: Mesh :: Vertex Position", "[control][mesh][attributes]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -448,7 +448,7 @@ TEST_CASE("Mesh - Vertex Position", "[mesh][attributes]")
     }
 }
 
-TEST_CASE("Mesh - Edge Attributes", "[mesh][attributes]")
+TEST_CASE("Control :: Mesh :: Edge Attributes", "[control][mesh][attributes]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;

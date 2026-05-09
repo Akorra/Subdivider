@@ -18,7 +18,7 @@ public:
     }
 };
 
-TEST_CASE("HalfEdge - Basic Properties", "[halfedge]")
+TEST_CASE("Control :: HalfEdge :: Basic Properties", "[control][halfedge]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -76,7 +76,7 @@ TEST_CASE("HalfEdge - Basic Properties", "[halfedge]")
     }
 }
 
-TEST_CASE("HalfEdge - Boundary Half-Edges", "[halfedge][boundary]")
+TEST_CASE("Control :: HalfEdge :: Boundary Half-Edges", "[control][halfedge][boundary]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -105,7 +105,7 @@ TEST_CASE("HalfEdge - Boundary Half-Edges", "[halfedge][boundary]")
     }
 }
 
-TEST_CASE("HalfEdge - Twin Half-Edges", "[halfedge][twins]")
+TEST_CASE("Control :: HalfEdge :: Twin Half-Edges", "[control][halfedge][twins]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -179,7 +179,7 @@ TEST_CASE("HalfEdge - Twin Half-Edges", "[halfedge][twins]")
     }
 }
 
-TEST_CASE("HalfEdge - Face Loop", "[halfedge][face][loop]")
+TEST_CASE("Control :: HalfEdge :: Face Loop", "[control][halfedge][face][loop]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -247,7 +247,7 @@ TEST_CASE("HalfEdge - Face Loop", "[halfedge][face][loop]")
     }
 }
 
-TEST_CASE("HalfEdge - Next/Prev Connectivity", "[halfedge][connectivity]")
+TEST_CASE("Control :: HalfEdge :: Next/Prev Connectivity", "[control][halfedge][connectivity]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -287,7 +287,7 @@ TEST_CASE("HalfEdge - Next/Prev Connectivity", "[halfedge][connectivity]")
     }
 }
 
-TEST_CASE("HalfEdge - getFromVertex", "[halfedge][query]")
+TEST_CASE("Control :: HalfEdge :: getFromVertex", "[control][halfedge][query]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -320,7 +320,7 @@ TEST_CASE("HalfEdge - getFromVertex", "[halfedge][query]")
     }
 }
 
-TEST_CASE("HalfEdge - Validation", "[halfedge][validation]")
+TEST_CASE("Control :: HalfEdge :: Validation", "[control][halfedge][validation]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;

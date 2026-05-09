@@ -19,7 +19,7 @@ public:
     }
 };
 
-TEST_CASE("TopologyCache - Lazy Building", "[cache]")
+TEST_CASE("Control :: TopologyCache :: Lazy Building", "[control][cache]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -43,7 +43,7 @@ TEST_CASE("TopologyCache - Lazy Building", "[cache]")
     }
 }
 
-TEST_CASE("TopologyCache - Invalidation", "[cache]")
+TEST_CASE("Control :: TopologyCache :: Invalidation", "[control][cache]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -74,7 +74,7 @@ TEST_CASE("TopologyCache - Invalidation", "[cache]")
     }
 }
 
-TEST_CASE("TopologyCache - Vertex Valence", "[cache][valence]")
+TEST_CASE("Control :: TopologyCache :: Vertex Valence", "[control][cache][valence]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -116,7 +116,7 @@ TEST_CASE("TopologyCache - Vertex Valence", "[cache][valence]")
     }
 }
 
-TEST_CASE("TopologyCache - Boundary Detection", "[cache][boundary]")
+TEST_CASE("Control :: TopologyCache :: Boundary Detection", "[control][cache][boundary]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -141,7 +141,7 @@ TEST_CASE("TopologyCache - Boundary Detection", "[cache][boundary]")
     }
 }
 
-TEST_CASE("TopologyCache - Interior Vertex", "[cache][boundary]")
+TEST_CASE("Control :: TopologyCache :: Interior Vertex", "[control][cache][boundary]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -175,7 +175,7 @@ TEST_CASE("TopologyCache - Interior Vertex", "[cache][boundary]")
     }
 }
 
-TEST_CASE("TopologyCache - Vertex One-Ring", "[cache][onering]")
+TEST_CASE("Control :: TopologyCache :: Vertex One-Ring", "[control][cache][onering]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -206,7 +206,7 @@ TEST_CASE("TopologyCache - Vertex One-Ring", "[cache][onering]")
     }
 }
 
-TEST_CASE("TopologyCache - Edge Vertices", "[cache][edge]")
+TEST_CASE("Control :: TopologyCache :: Edge Vertices", "[control][cache][edge]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -231,7 +231,7 @@ TEST_CASE("TopologyCache - Edge Vertices", "[cache][edge]")
     }
 }
 
-TEST_CASE("TopologyCache - Face Vertices", "[cache][face]")
+TEST_CASE("Control :: TopologyCache :: Face Vertices", "[control][cache][face]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;
@@ -256,7 +256,7 @@ TEST_CASE("TopologyCache - Face Vertices", "[cache][face]")
     }
 }
 
-TEST_CASE("TopologyCache - Statistics", "[cache][stats]")
+TEST_CASE("Control :: TopologyCache :: Statistics", "[control][cache][stats]")
 {
     DiagnosticTestScope diag;
     Mesh mesh;

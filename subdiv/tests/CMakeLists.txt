@@ -11,26 +11,25 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(Catch2)
 
-# Create test executable
-add_executable(subdiv_tests
-    test_halfedge.cpp
-    test_controlmesh.cpp
-    test_meshcache.cpp
-    # Add more test files as needed
-)
-
-# Link libraries
-target_link_libraries(subdiv_tests
-    PRIVATE
-        subdiv
-        Catch2::Catch2WithMain
-)
-
-# Make sure tests compile with the same C++ standard
-target_compile_features(subdiv_tests PRIVATE cxx_std_23)
-
 include(CTest)
 include(Catch)
-catch_discover_tests(subdiv_tests)
+
+# Helper function
+function(add_subdiv_test TARGET)
+    add_executable(${TARGET} ${ARGN})
+
+    # Link libraries
+    target_link_libraries(${TARGET} PRIVATE subdiv Catch2::Catch2WithMain )
+
+    # Make sure tests compile with the same C++ standard
+    target_compile_features(${TARGET} PRIVATE cxx_std_23)
+
+    catch_discover_tests(${TARGET})
+endfunction()
+
+# Control tests
+add_subdiv_test(control_mesh_tests      control/test_mesh.cpp)
+add_subdiv_test(control_halfedge_tests  control/test_halfedge.cpp)
+add_subdiv_test(control_meshcache_tests control/test_meshcache.cpp)
 
 message(STATUS "Subdiv tests configured with Catch2")
