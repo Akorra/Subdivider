@@ -6,7 +6,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 
-#include "control/mesh.hpp"
 #include "render_mesh.hpp"
 
 // Simple vertex shader

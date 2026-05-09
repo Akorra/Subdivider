@@ -1,5 +1,5 @@
 #include "render_mesh.hpp"
-#include "config.hpp"
+#include "subdiv/config.hpp"
 
 RenderMesh::RenderMesh(const Subdiv::Control::Mesh& mesh) : mesh_(mesh)
 {

@@ -1,5 +1,5 @@
-#include "control/mesh.hpp"
-#include "diagnostics/context.hpp"
+#include "subdiv/control/mesh.hpp"
+#include "subdiv/diagnostics/context.hpp"
 
 #include <unordered_set>
 #include <algorithm>

@@ -1,7 +1,8 @@
 #include <catch2/catch_test_macros.hpp>
-#include "control/mesh.hpp"
-#include "control/mesh_cache.hpp"
-#include "diagnostics/context.hpp"
+
+#include "subdiv/control/mesh.hpp"
+#include "subdiv/control/mesh_cache.hpp"
+#include "subdiv/diagnostics/context.hpp"
 
 using namespace Subdiv::Control;
 using namespace Subdiv::Diagnostics;

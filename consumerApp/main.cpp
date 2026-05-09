@@ -1,7 +1,8 @@
 #include <iostream>
 
 #include "app.hpp"
-#include "config.hpp"
+
+#include "subdiv/config.hpp"
 
 int main() 
 {

@@ -1,8 +1,8 @@
-#include "control/mesh_cache.hpp"
+#include "subdiv/control/mesh_cache.hpp"
 
-#include "control/mesh.hpp"
+#include "subdiv/control/mesh.hpp"
 
-#include "diagnostics/context.hpp"
+#include "subdiv/diagnostics/context.hpp"
 
 namespace Subdiv::Control 
 {

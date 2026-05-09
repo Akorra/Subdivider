@@ -1,5 +1,5 @@
 #include "animator.hpp"
-#include "control/mesh.hpp"
+#include "subdiv/control/mesh.hpp"
 #include <cmath>
 
 void VertexAnimator::setActive(bool val)

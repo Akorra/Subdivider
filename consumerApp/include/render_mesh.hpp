@@ -1,6 +1,6 @@
 #pragma once
 
-#include "control/mesh.hpp"
+#include "subdiv/control/mesh.hpp"
 
 /**
  * @brief Rendering wrapper for Mesh.

@@ -1,4 +1,4 @@
-#include "diagnostics/context.hpp"
+#include "subdiv/diagnostics/context.hpp"
 
 #include <sstream>
 #include <iomanip>
