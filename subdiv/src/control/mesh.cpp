@@ -14,8 +14,7 @@ VertexIndex Mesh::addVertex(const glm::vec3& pos)
 
     Vertex v;
     v.outgoing  = INVALID_INDEX;
-    v.sharpness = 0.0f;
-    v.isCorner  = 0;
+    v.sharpness = SMOOTH_CREASE;
 
     vertices.push_back(v);
     positions.push_back(pos);
@@ -154,8 +153,7 @@ FaceIndex Mesh::addFace(std::span<const VertexIndex> verts)
             he.edge = edgeIdx;
             
             Edge edge;
-            edge.tag = EdgeTag::SMOOTH;
-            edge.sharpness = 0.0f;
+            edge.sharpness = SMOOTH_CREASE;
             edges.push_back(edge);
             
             halfEdges.push_back(he);
@@ -184,16 +182,15 @@ void Mesh::setPosition(VertexIndex v, const glm::vec3& pos)
 void Mesh::setEdgeSharpness(EdgeIndex e, float sharpness)
 {
     if (e >= edges.size()) return;
-    edges[e].sharpness = sharpness;
-    edges[e].tag       = (sharpness > 0.0f) ? EdgeTag::SEMI : EdgeTag::SMOOTH;
+
+    static constexpr float precision = 10.0f; // round to 1 decimal place
+    edges[e].sharpness = (sharpness < SMOOTH_CREASE || sharpness > MAX_SHARPNESS) ? HARD_CREASE : glm::round(sharpness * precision)/precision;
 }
 
 void Mesh::setEdgeCrease(EdgeIndex e, bool crease)
 {
     if (e >= edges.size()) return;
-    edges[e].tag = crease ? EdgeTag::CREASE : EdgeTag::SMOOTH;
-    if (crease)
-        edges[e].sharpness = 1.0f;
+    edges[e].sharpness = crease ? HARD_CREASE : SMOOTH_CREASE;
 }
 
 void Mesh::clear()

@@ -9,6 +9,9 @@ namespace Subdiv::Control
 {
 
 static constexpr uint32_t INVALID_INDEX = 0xFFFFFFFF;
+static constexpr float    HARD_CREASE   = -1.0f;
+static constexpr float    SMOOTH_CREASE = 0.0f;
+static constexpr float    MAX_SHARPNESS = 10.0f;
 
 // #define IS_VALID_INDEX(idx, maxSize) ((idx) != INVALID_INDEX && (idx) < (maxSize))
 template <typename IndexT>
@@ -21,30 +24,18 @@ using FaceIndex     = uint32_t;
 using EdgeIndex     = uint32_t;
 
 /**
- * @brief Edge sharpness classification for subdivision.
- */
-enum class EdgeTag : uint8_t 
-{
-    SMOOTH = 0,  ///< Smooth edge (default)
-    CREASE = 1,  ///< Hard crease (infinitely sharp)
-    SEMI   = 2,  ///< Semi-sharp (sharpness decreases each subdivision)
-};
-
-/**
  * @brief Vertex structure - GPU friendly layout.
  * 
- * Memory layout:   16 bytes
- * - vec3 position: 12 bytes
+ * Memory layout:   8 bytes
  * - HalfEdgeIndex: 4 bytes
+ * - sharpness:     4 bytes
  */
 struct Vertex 
 {
     HalfEdgeIndex outgoing   = INVALID_INDEX; // One outgoing half-edge
-    float         sharpness  = 0.0f;          // Corner sharpness
-    uint8_t       isCorner   = 0;             // Dart vertex flag
-    uint8_t       padding[3] = {0};           // Explicit padding
+    float         sharpness  = SMOOTH_CREASE; // 0=smooth, >0=semi-sharp corner, -1=hard corner
 };
-static_assert(sizeof(Vertex) == 12, "Vertex should be 12 bytes");
+static_assert(sizeof(Vertex) == 8, "Vertex should be 8 bytes");
 
 /**
  * @brief Half-edge structure.
@@ -67,15 +58,13 @@ static_assert(sizeof(HalfEdge) == 24, "HalfEdge should be 24 bytes");
  * @brief Edge attributes - shared between twin half-edges.
  * Stores crease information for subdivision.
  * 
- * Memory layout: 8 bytes
+ * Memory layout: 4 bytes
  */
 struct Edge 
 {
-    EdgeTag tag = EdgeTag::SMOOTH;
-    uint8_t padding[3] = {0};
-    float sharpness = 0.0f;
+    float sharpness = SMOOTH_CREASE; // 0 = smooth, >0 = semi-sharp, -1 = hard crease 
 };
-static_assert(sizeof(Edge) == 8, "Edge should be 8 bytes");
+static_assert(sizeof(Edge) == 4, "Edge should be 4 bytes");
 
 /**
  * @brief Face structure.

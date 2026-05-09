@@ -463,21 +463,18 @@ TEST_CASE("Mesh - Edge Attributes", "[mesh][attributes]")
     
     SECTION("Default is smooth")
     {
-        REQUIRE(mesh.edges[e].tag == EdgeTag::SMOOTH);
-        REQUIRE(mesh.edges[e].sharpness == 0.0f);
+        REQUIRE(mesh.edges[e].sharpness == SMOOTH_CREASE);
     }
     
     SECTION("Set crease")
     {
         mesh.setEdgeCrease(e, true);
-        REQUIRE(mesh.edges[e].tag == EdgeTag::CREASE);
-        REQUIRE(mesh.edges[e].sharpness == 1.0f);
+        REQUIRE(mesh.edges[e].sharpness == HARD_CREASE);
     }
     
     SECTION("Set semi-sharp")
     {
         mesh.setEdgeSharpness(e, 0.5f);
-        REQUIRE(mesh.edges[e].tag == EdgeTag::SEMI);
         REQUIRE(mesh.edges[e].sharpness == 0.5f);
     }
 }
